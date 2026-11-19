@@ -41,6 +41,7 @@ DEFAULTS: dict[str, Any] = {
     "breathing_cycles": 5,
     "walk_enabled": True,
     "lunch_minutes": 60,
+    "laptop_alerts": True,  # battery, charger, heat, internet, headphones, volume, late night
     "developer": False,  # the author's own machine: hides the developer credit
     "theme": "auto",  # auto / dark / light for Saarthi's own pop-ups
 }

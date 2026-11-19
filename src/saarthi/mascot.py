@@ -55,18 +55,26 @@ class BitSkin(Skin):
     def states(self) -> set[State]:
         return set(State)
 
-    def paint(self, p: QPainter, rect: QRectF, state: State, t: float, t_state: float) -> None:
+    def variants(self, state: State) -> set[str]:
+        return {"popcorn"} if state == S.WATCHING else set()
+
+    def paint(
+        self, p: QPainter, rect: QRectF, state: State, t: float, t_state: float, variant: str | None = None
+    ) -> None:
         p.save()
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
         s = min(rect.width(), rect.height()) / 200.0
         p.translate(rect.x() + (rect.width() - 200 * s) / 2, rect.y() + (rect.height() - 200 * s) / 2)
         p.scale(s, s)
-        _Bit(p, state, t, t_state, self.accessory).draw()
+        _Bit(p, state, t, t_state, self.accessory, variant).draw()
         p.restore()
 
 
 class _Bit:
-    def __init__(self, p: QPainter, state: State, t: float, ts: float, accessory: str | None = None):
+    def __init__(
+        self, p: QPainter, state: State, t: float, ts: float, accessory: str | None = None, variant: str | None = None
+    ):
+        self.variant = variant
         self.p, self.state, self.t, self.ts = p, state, t, ts
         self.accessory = accessory
         speed = {S.TYPING_FAST: 10.0, S.SLEEPING: 0.9, S.AFK: 1.3}.get(state, 2.4)
@@ -476,7 +484,7 @@ class _Bit:
             else:  # watching: relaxed, right hand dips into popcorn
                 ly, ry = 126, 126
             self.hand(56, ly)
-            if st == S.WATCHING:
+            if st == S.WATCHING and self.variant == "popcorn":
                 self.popcorn()
                 dip = max(0.0, math.sin(t * 1.3)) ** 6
                 self.hand(146 + dip * 12, 126 + dip * 8)

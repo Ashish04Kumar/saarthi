@@ -40,10 +40,10 @@ class Bubble(QWidget):
         h = br.height() + PAD * 2 + TAIL
         x = anchor.center().x() - w // 2
         x = max(screen.left() + 4, min(x, screen.right() - w - 4))
-        y = anchor.top() - h + 6
+        y = anchor.top() - h + 2  # tail tip just touches the head
         self.tail_down = y >= screen.top()
         if not self.tail_down:
-            y = anchor.bottom() - 6
+            y = anchor.bottom() - 2
         self.tail_x = min(max(anchor.center().x() - x, 20), w - 20)
         self.setGeometry(x, y, w, h)
         self.show()

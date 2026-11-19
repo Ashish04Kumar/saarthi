@@ -13,10 +13,13 @@ skin.json example:
     "idle":        {"frames": "idle/*.png"},
     "typing_fast": {"gif": "typing.gif"},
     "sleeping":    {"sheet": "sleep.png", "cols": 8, "rows": 1, "fps": 6},
-    "waking":      {"frames": "wake/*.png", "loop": false}
+    "waking":      {"frames": "wake/*.png", "loop": false},
+    "watching.popcorn": {"frames": "watching_popcorn/*.png"}
   }
 }
 Missing states fall back automatically (see states.FALLBACK).
+"<state>.<variant>" keys are optional extra takes on a state; the app picks one to suit what's going on
+(e.g. watching.notes for a tutorial, watching.popcorn for anything else).
 """
 
 from __future__ import annotations
@@ -44,9 +47,15 @@ class Skin(ABC):
     @abstractmethod
     def states(self) -> set[State]: ...
 
+    def variants(self, state: State) -> set[str]:  # noqa: B027 - optional extra animations
+        return set()
+
     @abstractmethod
-    def paint(self, p: QPainter, rect: QRectF, state: State, t: float, t_state: float) -> None:
-        """Draw `state` into `rect`. t = seconds since app start, t_state = since state began."""
+    def paint(
+        self, p: QPainter, rect: QRectF, state: State, t: float, t_state: float, variant: str | None = None
+    ) -> None:
+        """Draw `state` into `rect`. t = seconds since app start, t_state = since state began.
+        `variant` picks an alternative take on the state when the skin has one."""
 
 
 @dataclass
@@ -102,9 +111,11 @@ class SpriteSkin(Skin):
         self.author = meta.get("author", "")
         default_fps = float(meta.get("fps", 12))
         self.anims: dict[State, Animation] = {}
+        self.extra: dict[tuple[State, str], Animation] = {}  # "watching.notes" -> (WATCHING, "notes")
         for key, spec in meta.get("states", {}).items():
+            base, _, variant = key.partition(".")
             try:
-                state = State(key)
+                state = State(base)
             except ValueError:
                 continue
             frames, gif_fps = _load_frames(folder, spec)
@@ -112,7 +123,10 @@ class SpriteSkin(Skin):
             if frames:
                 fps = float(spec.get("fps", gif_fps or default_fps))
                 loop = bool(spec.get("loop", True))
-                self.anims[state] = Animation(frames, fps, loop)
+                if variant:
+                    self.extra[(state, variant)] = Animation(frames, fps, loop)
+                else:
+                    self.anims[state] = Animation(frames, fps, loop)
         if not self.anims:
             raise ValueError(f"Skin {folder} has no loadable states")
         first = next(iter(self.anims.values())).frames[0]
@@ -121,8 +135,12 @@ class SpriteSkin(Skin):
     def states(self) -> set[State]:
         return set(self.anims)
 
-    def paint(self, p, rect, state, t, t_state):
-        anim = self.anims[resolve(state, self.states())]
+    def variants(self, state: State) -> set[str]:
+        return {v for s, v in self.extra if s == state}
+
+    def paint(self, p, rect, state, t, t_state, variant=None):
+        anim = self.extra.get((state, variant)) if variant else None
+        anim = anim or self.anims[resolve(state, self.states())]
         pix = anim.frame(t_state, int(rect.width()), int(rect.height()))
         x = rect.x() + (rect.width() - pix.width()) / 2
         y = rect.y() + rect.height() - pix.height()  # stand on the bottom edge

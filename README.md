@@ -2,7 +2,7 @@
 
 **Your animated desktop companion (सारथी, "the one who guides your chariot").**
 It lives on your screen and reacts to what you're doing: type fast and it sweats, pause to think and it
-ponders, watch a tutorial and it grabs popcorn, walk away and it falls asleep. It also keeps your
+ponders, watch a tutorial and it takes notes (a funny video gets popcorn), walk away and it falls asleep. It also keeps your
 reminders and notes, takes breaks and lunch with you, breathes with you, and tells you the traffic home.
 
 ![Saarthi in all its states](docs/avatar-states.png)
@@ -24,8 +24,13 @@ reminders and notes, takes breaks and lunch with you, breathes with you, and tel
   (YouTube, Udemy, Coursera…), music, away, asleep. Counts *how fast* you type, never *what*.
 - **18 animations** with the 3D **Saarthi** character by default, the cartoon robot **Bit**, your own
   skins, and a **3D avatar maker** for a full-body character of yourself
-- **Alive when you touch it**: poke its head, tickle its belly, click too much and it gets dizzy;
-  drag it anywhere; **walking mode** strolls along your screen
+- **Alive when you touch it**: poke its head, tickle its belly, step on its shoes, tug its jeans, click
+  too much and it gets dizzy; only the character itself is clickable (clicks around it reach the window
+  behind); drag it anywhere; **walking mode** strolls along your screen
+- **Watches the laptop too**: battery below 15% / 10% (tired look and a red battery icon), loud at 5%;
+  happy when you plug in, "unplug at 100%"; fans itself when the CPU runs hot; internet gone / back;
+  "restart, it's been 3 days"; headphones in/out; mute and volume past 100%; "go to sleep" after
+  midnight; moves to the bigger screen when you plug in a monitor
 - **Status: Working / Break / Lunch**: pick the minutes; it goes on a chai break or eats lunch, then
   strolls and thinks; click the status again to end it, or change the time while it runs
 - **Breaks and guided breathing**: break after 50 min of work (cancelled if you keep typing on
@@ -326,6 +331,10 @@ Blender), render each animation to transparent PNG frames, and drop them in a sk
 
 State names: `idle typing_fast typing_slow scrolling watching afk sleeping waking happy stretch alert`
 
+Optional extra takes on a state use `state.take` keys. While you watch a study video Saarthi picks from
+`watching.notes`, `watching.chin` and `watching.try`; for anything else from `watching.popcorn`,
+`watching.laugh` and `watching.sip`. A skin without them just uses `watching`.
+
 Preview a skin without running the app:
 
 ```bash
@@ -336,7 +345,9 @@ saarthi --snapshot out/ --skin "folder:/path/to/skin"
 
 Saarthi only records *that* a key was pressed (a timestamp, kept for 3 seconds to measure
 speed), never *which* key. Nothing is written to disk and nothing leaves your computer except
-the weather/traffic lookups described above (each can be turned off in Settings). Check `src/saarthi/activity/inputs.py`.
+the weather/traffic lookups described above (each can be turned off in Settings). To tell whether
+you're online it opens a connection to 1.1.1.1 / 8.8.8.8 every 15 s and sends nothing (turn off
+**Laptop alerts** in the menu to stop it). Check `src/saarthi/activity/inputs.py`.
 
 ## Roadmap
 

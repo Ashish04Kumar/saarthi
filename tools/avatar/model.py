@@ -412,6 +412,28 @@ def props(pose: Pose, J, R):
         sc = V(*pr["spoon"])
         out.append(Part(LAPTOP, lambda p: np.minimum(capsule(p, sc, sc + V(0.10, -0.04, -0.03), 0.010),
                                                      ellipsoid(p, sc, V(0.028, 0.012, 0.02)))))
+    if pr.get("notebook") is not None:
+        nc, tilt = V(*pr["notebook"][0]), pr["notebook"][1]
+        Rn = rot_x(tilt).astype(np.float32)  # tipped towards the viewer so the pages show
+        out.append(Group([
+            Part(RED, lambda p: box(p, nc, V(0.11, 0.010, 0.14), 0.006, Rn)),  # cover
+            Part(WHITE, lambda p: box(p, nc + Rn @ V(0, 0.012, 0), V(0.10, 0.006, 0.13), 0.003, Rn)),  # pages
+            Part(PUPIL, lambda p: np.minimum.reduce([  # written lines
+                box(p, nc + Rn @ V(-0.01, 0.019, dz), V(0.07, 0.002, 0.004), 0.0, Rn)
+                for dz in (-0.08, -0.045, -0.01, 0.025)])),
+        ], nc, 0.24))
+    if pr.get("pen") is not None:
+        a, b = (V(*x) for x in pr["pen"])
+        out.append(Part(PUPIL, lambda p: capsule(p, a, b, 0.008, 0.011)))
+    if pr.get("soda") is not None:
+        c = V(*pr["soda"])
+        out.append(Group([
+            Part(RED, lambda p: cylinder(p, c, 0.065, 0.10, 0.01)),
+            Part(WHITE, lambda p: np.minimum.reduce([
+                cylinder(p, c + V(0, 0.01, 0), 0.068, 0.02, 0.004),  # band
+                cylinder(p, c + V(0, 0.103, 0), 0.07, 0.008, 0.004),  # lid
+                capsule(p, c + V(0.0, 0.09, 0.0), c + V(-0.03, 0.22, 0.03), 0.009)])),  # straw
+        ], c + V(0, 0.05, 0), 0.22))
     if pr.get("popcorn"):
         out.append(Group([
             Part(BUCKET, lambda p: cylinder(p, BUCKET_C, 0.10, 0.12, 0.01)),

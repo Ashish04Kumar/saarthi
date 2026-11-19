@@ -24,6 +24,20 @@ from .window import BuddyWindow
 SIZES = {"Small": 110, "Medium": 160, "Large": 220, "Huge": 300}
 CHATTY = {State.TYPING_FAST, State.WATCHING, State.WAKING, State.STRETCH, State.SCROLLING}
 AUTO_LINE_GAP = 60.0  # seconds between unprompted state-change lines
+# What the character does while you watch: a study video gets notes / hand-on-chin / trying the code,
+# anything else gets popcorn / a laugh / a cold drink. It switches between them every so often.
+STUDY_TAKES = ("notes", "chin", "try")
+FUN_TAKES = ("popcorn", "laugh", "sip")
+TAKE_SECONDS = (25.0, 50.0)
+
+
+def pick_watch_take(study: bool, available: set[str], current: str | None = None) -> str | None:
+    """A watching animation that suits the video, different from the current one when possible."""
+    pool = [v for v in (STUDY_TAKES if study else FUN_TAKES) if v in available]
+    if not pool:
+        return None
+    return random.choice([v for v in pool if v != current] or pool)
+
 
 # How important a line is. A line never cuts off a more important one that's still showing:
 # it waits its turn (LOW lines are simply skipped instead of waiting).
@@ -67,7 +81,11 @@ class Saarthi:
 
         self.onboarding = Onboarding(self)
         self.wellness = Wellness(self)
+        from .laptop_react import LaptopReactions
+
+        self.laptop = LaptopReactions(self)
         self._sim: tuple | None = None  # (Activity, until) from the Try menu
+        self._watch: tuple[bool, float] | None = None  # (study video?, switch take at) while watching
         self._clicks: list[float] = []
         self.quiet = False  # screen-share mode: small, in a corner, no pop-ups
         self._quiet_saved: tuple | None = None
@@ -108,8 +126,19 @@ class Saarthi:
             self.say(line_for("music", self.cfg["language"]), priority=LOW)
         self.music_was_playing = activity.music_playing
         self.win.set_state(state, self.sm.entered_at if self.sm.preview is None else self.win.state_started)
+        self._update_watch_take(state, activity, now)
         if state != before and self.sm.preview is None:
             self.on_state_change(state, now)
+
+    def _update_watch_take(self, state: State, activity, now: float) -> None:
+        if state != State.WATCHING:
+            self._watch = None
+            return
+        study = bool(activity.media_tutorial)
+        if self._watch is None or self._watch[0] != study or now >= self._watch[1]:
+            take = pick_watch_take(study, self.skin.variants(State.WATCHING), self.win.variant(State.WATCHING))
+            self.win.set_variant(State.WATCHING, take)
+            self._watch = (study, now + random.uniform(*TAKE_SECONDS))
 
     def on_state_change(self, state: State, now: float):
         chatty = state in CHATTY and now - self.last_line_at > AUTO_LINE_GAP
@@ -152,7 +181,7 @@ class Saarthi:
     def _show_line(self, text: str, ms: int | None, prio: int):
         self.last_line_at = time.monotonic()
         self._bubble_prio = prio
-        self.bubble.say(text, self.win.frameGeometry(), self.screen_rect(), ms)
+        self.bubble.say(text, self.win.body_rect(), self.screen_rect(), ms)
 
     def _next_line(self):
         self._bubble_prio = LOW
@@ -164,7 +193,7 @@ class Saarthi:
         QTimer.singleShot(400, lambda: self._show_line(text, ms, prio))
 
     def follow_bubble(self):
-        self.bubble.follow(self.win.frameGeometry(), self.screen_rect())
+        self.bubble.follow(self.win.body_rect(), self.screen_rect())
         self.org._place_cards()
 
     def screen_rect(self):
@@ -172,8 +201,9 @@ class Saarthi:
         return scr.availableGeometry()
 
     # ---------- interaction ----------
-    def on_click(self, where: float = 0.5):
-        """Single click: poke the head, tickle the belly, or annoy it by clicking a lot."""
+    def on_click(self, part: str = "body"):
+        """Single click: poke the head, tickle the belly, step on the shoes, tug the jeans,
+        or annoy it by clicking a lot."""
         if self.quiet:
             return  # stays still while you share your screen
         now = time.monotonic()
@@ -187,16 +217,20 @@ class Saarthi:
             self.say(msg if lang == "hinglish" else "Session running (Status → Working to stop)", 2500, force=True)
             return
         self._clicks = [c for c in self._clicks if now - c < 3] + [now]
+        take = None
         if len(self._clicks) >= 4:
             state, key = State.POKED, "dizzy"
             self._clicks.clear()
-        elif where < 0.45:
+        elif part in ("boots", "jeans"):
+            state, key, take = State.POKED, part, part
+        elif part == "head":
             state, key = State.POKED, "poked"
         else:
             state, key = State.GIGGLE, "giggle"
         if self.sm.preview is None:
             self.sm.trigger(state, now)
             self.win.set_state(state, now)
+            self.win.set_variant(State.POKED, take)
         self.say(line_for(key, lang), 2500, priority=HIGH)
 
     def toggle_status(self, key: str) -> bool:
@@ -297,6 +331,7 @@ class Saarthi:
 
     def shutdown(self):
         self.source.stop()
+        self.laptop.stop()
         self.org.stop()
 
     def on_tray(self, reason):
@@ -383,6 +418,11 @@ class Saarthi:
         walk = QAction("Walking mode (strolls around)", m, checkable=True, checked=bool(self.cfg["walk_enabled"]))
         walk.toggled.connect(lambda v: self.cfg.__setitem__("walk_enabled", v))
         m.addAction(walk)
+        lap = QAction(
+            "Laptop alerts (battery, heat, internet…)", m, checkable=True, checked=bool(self.cfg["laptop_alerts"])
+        )
+        lap.toggled.connect(lambda v: (self.cfg.__setitem__("laptop_alerts", v), self.laptop.refresh_looks(0)))
+        m.addAction(lap)
         from .system import autostart_enabled, set_autostart
 
         boot = QAction("Start with my computer", m, checkable=True, checked=autostart_enabled())
@@ -448,9 +488,11 @@ class Saarthi:
         ):
             act.addAction(label, lambda a=a: self.simulate(a))
         t.addSeparator()
-        t.addAction("Poke head", lambda: (self._clicks.clear(), self.on_click(0.2)))
-        t.addAction("Tickle belly", lambda: (self._clicks.clear(), self.on_click(0.8)))
-        t.addAction("Click too much (dizzy)", lambda: [self.on_click(0.5) for _ in range(4)])
+        t.addAction("Poke head", lambda: (self._clicks.clear(), self.on_click("head")))
+        t.addAction("Tickle belly", lambda: (self._clicks.clear(), self.on_click("body")))
+        t.addAction("Step on the shoes", lambda: (self._clicks.clear(), self.on_click("boots")))
+        t.addAction("Tug the jeans", lambda: (self._clicks.clear(), self.on_click("jeans")))
+        t.addAction("Click too much (dizzy)", lambda: [self.on_click("body") for _ in range(4)])
         t.addAction("Walk somewhere", lambda: self.walker.walk_random(on_arrive=self.save_position))
         t.addSeparator()
         t.addAction(
@@ -467,6 +509,35 @@ class Saarthi:
         t.addAction("1-minute break (walks + chai)", lambda: self.wellness.start_break(1))
         t.addAction("Breathing exercise (2 breaths)", self._try_breathe)
         t.addSeparator()
+        lap = t.addMenu("💻 Laptop")
+        for label, name in (
+            ("Battery low (12%)", "battery_low"),
+            ("Battery critical (4%)", "battery_critical"),
+            ("Charger plugged in", "charger_in"),
+            ("Charger unplugged", "charger_out"),
+            ("Battery full", "battery_full"),
+            ("Laptop running hot", "cpu_hot"),
+            ("Internet gone", "net_down"),
+            ("Internet back", "net_up"),
+            ("No restart for days", "uptime"),
+            ("Headphones in", "headphones_on"),
+            ("Headphones out", "headphones_off"),
+            ("Muted", "muted"),
+            ("Volume past 100%", "volume_max"),
+            ("Working past midnight", "late_night"),
+            ("Second monitor plugged in", "big_screen"),
+        ):
+            if name == "big_screen":
+                lap.addAction(
+                    label,
+                    lambda: (
+                        self.laptop.to_big_screen()
+                        if len(self.app.screens()) > 1
+                        else self.say(line_for("big_screen", self.cfg["language"]), force=True)
+                    ),
+                )
+            else:
+                lap.addAction(label, lambda n=name: self.laptop.simulate(n))
         t.addAction("Weather now", lambda: self.outdoor.say_weather())
         t.addAction("Rain warning", lambda: self.say("15:00 tak baarish aa sakti hai ☔ Chhata le lena", force=True))
         t.addAction("Traffic to home", lambda: self.outdoor.commute_now())

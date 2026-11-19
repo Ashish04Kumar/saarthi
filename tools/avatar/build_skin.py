@@ -28,7 +28,7 @@ CAMERA = Camera(V(0, 1.16, 0), yaw=24, pitch=10, half_size=1.3)
 def _job(args):
     state, i, size, out, look_kw = args
     frames, fps, loop = STATES[state]
-    path = Path(out) / state / f"{i:03d}.png"
+    path = Path(out) / state.replace(".", "_") / f"{i:03d}.png"
     if path.exists() and os.environ.get("SAARTHI_FORCE") != "1":
         return state, i
     look = Look(**look_kw)
@@ -62,7 +62,7 @@ def main():
         "name": args.name,
         "author": "Saarthi avatar maker",
         "fps": 10,
-        "states": {s: {"frames": f"{s}/*.png", "fps": STATES[s][1], "loop": STATES[s][2]} for s in STATES},
+        "states": {s: {"frames": f"{s.replace('.', '_')}/*.png", "fps": STATES[s][1], "loop": STATES[s][2]} for s in STATES},
     }
     Path(args.out, "skin.json").write_text(json.dumps(meta, indent=2))
     print("wrote", args.out)

@@ -12,10 +12,20 @@ TAU = 2 * math.pi
 # state: (frames, fps, loop)
 STATES = {
     "idle": (24, 10, True),
+    "idle.tired": (24, 8, True),  # battery low: droopy, yawning
+    "idle.hot": (24, 10, True),  # laptop running hot: fans himself, sweating
     "typing_fast": (12, 12, True),
     "typing_slow": (20, 8, True),
     "scrolling": (16, 8, True),
-    "watching": (24, 8, True),
+    "watching": (24, 8, True),  # neutral: eyes on the screen, nodding along
+    # what the character does while you watch: study videos ...
+    "watching.notes": (24, 8, True),
+    "watching.chin": (24, 8, True),
+    "watching.try": (24, 8, True),
+    # ... and everything else
+    "watching.popcorn": (24, 8, True),
+    "watching.laugh": (24, 8, True),
+    "watching.sip": (24, 8, True),
     "afk": (16, 6, True),
     "sleeping": (18, 6, True),
     "waking": (14, 12, False),
@@ -23,6 +33,8 @@ STATES = {
     "stretch": (24, 8, True),
     "alert": (12, 8, True),
     "poked": (16, 10, False),
+    "poked.boots": (16, 10, False),  # clicked on the shoes: hops, holding the sore foot
+    "poked.jeans": (16, 10, False),  # clicked on the jeans: brushes them off, hands on hips
     "giggle": (12, 12, True),
     "break": (24, 6, True),
     "breathe": (48, 4, True),  # 12 s = one breath (in 4, hold 2, out 6)
@@ -76,6 +88,31 @@ def pose_for(state: str, t: float) -> Pose:
             p.eyes = "closed"
         return p
 
+    if state == "idle.tired":
+        sway = math.sin(TAU * ph)
+        p = stand(-0.03 + 0.008 * sway)
+        p.head = add(p.head, dz=0.03)
+        for side, sx in (("a", -1), ("b", 1)):  # arms hang loose
+            setattr(p, f"el_{side}", (sx * 0.38, 0.80, 0.02))
+            setattr(p, f"wr_{side}", (sx * 0.40, 0.54, 0.04))
+        yawn = 0.45 < ph < 0.75
+        if yawn:  # hand over the yawn
+            p.el_b, p.wr_b = (0.40, 0.98, 0.20), (0.12, 1.36, 0.36)
+        p.head_rot = (0.22 - (0.25 if yawn else 0.0), 0.0, 0.10 * sway)
+        p.eyes = "closed" if yawn else "half"
+        p.brows, p.mouth = "sleepy", ("open" if yawn else "flat")
+        return p
+
+    if state == "idle.hot":
+        p = stand(0.006 * s)
+        fan = math.sin(TAU * ph * 6)
+        p.el_b, p.wr_b = (0.44, 1.00, 0.26), (0.24 + 0.14 * fan, 1.40, 0.48)  # fanning the face
+        p.el_a, p.wr_a = (-0.50, 0.86, -0.02), (-0.30, 0.66, 0.06)  # other hand on the hip
+        p.head_rot = (-0.08, -0.10, 0.04)
+        p.eyes, p.brows, p.mouth = "half", "sleepy", "open"
+        p.props["sweat"] = ph * 2 % 1.0
+        return p
+
     if state == "typing_fast":
         p = sit(0.008 * math.sin(TAU * ph * 2))
         k = math.sin(TAU * ph * 3)
@@ -115,7 +152,68 @@ def pose_for(state: str, t: float) -> Pose:
         p.head_rot = (0.12 - 0.06 * s, 0, 0)
         return p
 
-    if state == "watching":
+    if state == "watching":  # neutral, used by any skin without variants
+        p = sit(0.004 * s, lean=-0.02)
+        nod = max(0.0, math.sin(TAU * ph * 2)) ** 4
+        p.wr_a, p.el_a = (-0.24, 0.33, 0.24), (-0.40, 0.42, 0.08)
+        p.wr_b, p.el_b = (0.24, 0.33, 0.24), (0.40, 0.42, 0.08)
+        p.look, p.mouth = (0.0, -0.3), "smile"
+        p.head_rot = (0.08 + 0.10 * nod, 0, 0)
+        p.eyes = "closed" if 0.70 < ph < 0.73 else "open"
+        p.props["glow"] = 0.9
+        return p
+
+    if state == "watching.notes":  # study video: writes in a notebook propped on the knee
+        p = sit(0.004 * s)
+        nb, tilt = (0.64, 0.30, 0.30), 0.7
+        p.props.update(glow=0.8, notebook=(nb, tilt))
+        ct, st_ = math.cos(tilt), math.sin(tilt)
+
+        def page(dx, dz):  # a point on the page surface
+            return (nb[0] + dx, nb[1] + 0.025 * ct - dz * st_, nb[2] + 0.025 * st_ + dz * ct)
+
+        writing = ph >= 0.4
+        k = TAU * ph * 6
+        p.wr_a, p.el_a = (-0.24, 0.33, 0.24), (-0.40, 0.42, 0.08)
+        if writing:
+            tip = page(-0.03 + 0.04 * math.sin(k), -0.03 + 0.025 * math.cos(k * 1.7))
+            p.look, p.head_rot, p.brows, p.mouth = (0.8, -0.9), (0.28, 0.25, 0.04), "determined", "small"
+        else:
+            tip = page(-0.06, -0.10)
+            tip = (tip[0], tip[1] + 0.04, tip[2])  # pen lifted, eyes on the video
+            p.look, p.head_rot, p.brows, p.mouth = (0.0, -0.3), (0.08, 0, 0), "neutral", "smile"
+        p.wr_b = (tip[0] + 0.02, tip[1] + 0.07, tip[2] + 0.01)
+        p.el_b = (0.50, 0.46, 0.08)
+        p.props["pen"] = (tip, (tip[0] + 0.04, tip[1] + 0.12, tip[2] + 0.02))
+        return p
+
+    if state == "watching.chin":  # study video: hand on chin, "hmm, samjha"
+        p = sit(0.004 * s)
+        p.props["glow"] = 0.9
+        nod = max(0.0, math.sin(TAU * ph * 2)) ** 3
+        p.wr_b, p.el_b = (0.24, 0.90 - 0.02 * nod, 0.30), (0.40, 0.52, 0.22)
+        p.wr_a, p.el_a = (-0.24, 0.33, 0.24), (-0.40, 0.42, 0.08)
+        p.look = (0.0, -0.3)
+        p.head_rot = (0.04 + 0.08 * nod, 0.05, 0.05)
+        p.brows = "one" if ph < 0.6 else "raised"
+        p.mouth = "small" if ph < 0.6 else "smile"
+        if ph < 0.6:
+            p.props["thought"] = 1 + int(ph / 0.2)
+        return p
+
+    if state == "watching.try":  # study video: paused it and tries the code himself
+        p = sit(0.006 * s, lean=-0.03)
+        p.props["glow"] = 0.9
+        tap = math.sin(TAU * ph * 6)
+        p.wr_a = add(p.wr_a, dy=0.025 * max(tap, 0))
+        p.wr_b = add(p.wr_b, dy=0.025 * max(-tap, 0))
+        p.look, p.head_rot = (0.0, -0.8), (0.18, 0, 0)
+        done = ph > 0.8
+        p.brows, p.mouth = ("raised", "grin") if done else ("determined", "flat")
+        p.eyes = "happy" if done else "open"
+        return p
+
+    if state == "watching.popcorn":
         p = sit(0.005 * s, lean=0.05)
         p.props.update(popcorn=True, glow=0.9)
         dip = max(0.0, math.sin(TAU * ph)) ** 2
@@ -129,6 +227,31 @@ def pose_for(state: str, t: float) -> Pose:
         p.look = (0.0, -0.3)
         p.mouth = "o" if dip > 0.8 else "smile"
         p.brows = "raised" if 0.3 < ph < 0.4 else "neutral"
+        p.head_rot = (0.06, 0, 0)
+        return p
+
+    if state == "watching.laugh":  # funny video: leans back and laughs, slaps the knee
+        shake = math.sin(TAU * ph * 6)
+        p = sit(0.012 * shake, lean=0.07)
+        p.props["glow"] = 0.8
+        p.wr_a, p.el_a = (-0.10, 0.52, 0.20), (-0.38, 0.48, 0.10)  # hand on the belly
+        slap = max(0.0, math.sin(TAU * ph * 3))
+        p.wr_b, p.el_b = (0.42, 0.24 + 0.08 * slap, 0.24), (0.46, 0.42, 0.08)
+        p.eyes, p.mouth, p.brows = "happy", "open", "raised"
+        p.head_rot = (-0.14 + 0.03 * shake, 0, 0.06 * math.sin(TAU * ph))
+        return p
+
+    if state == "watching.sip":  # sipping a cold drink through a straw
+        p = sit(0.005 * s, lean=0.04)
+        sip = min(1.0, max(0.0, math.sin(TAU * ph)) * 1.6)
+        rest_c, mouth_c = (0.60, 0.40, 0.30), (0.09, 0.70, 0.40)
+        cup = tuple(rest_c[i] + (mouth_c[i] - rest_c[i]) * sip for i in range(3))
+        p.wr_b = (cup[0] + 0.06, cup[1] - 0.01, cup[2] - 0.02)
+        p.el_b = (0.44, 0.46 + 0.18 * sip, 0.10)
+        p.wr_a, p.el_a = (-0.24, 0.33, 0.24), (-0.40, 0.42, 0.08)
+        p.props.update(glow=0.9, soda=cup)
+        p.look = (0.0, -0.3)
+        p.mouth = "small" if sip > 0.6 else "smile"
         p.head_rot = (0.06, 0, 0)
         return p
 
@@ -245,6 +368,37 @@ def pose_for(state: str, t: float) -> Pose:
         p.head_rot = (0.02, -0.35, 0.03 * sw)  # glance a bit towards the viewer
         p.look = (-0.6, 0.0)
         p.mouth = "smile"
+        return p
+
+    if state == "poked.boots":
+        p = stand()
+        hop = abs(math.sin(t * 11)) * math.exp(-0.8 * t)
+        p.offset = (0, 0.05 * hop, 0)
+        p.kn_a, p.an_a, p.foot_dir_a = (-0.17, 0.48, 0.22), (-0.20, 0.34, 0.02), (0, -0.3, 1)
+        p.el_a, p.wr_a = (-0.42, 0.70, 0.14), (-0.24, 0.42, 0.12)  # holding the foot
+        wave = 0.05 * math.sin(t * 9)
+        p.el_b, p.wr_b = (0.52, 0.96, 0.02), (0.70, 1.00 + wave, 0.04)  # arm out for balance
+        p.head_rot = (0.28, 0.0, 0.12 * math.sin(t * 6))
+        p.look = (-0.3, -1.0)
+        p.eyes = "closed" if t < 0.7 else "open"
+        p.brows, p.mouth = "determined", "open"
+        return p
+
+    if state == "poked.jeans":
+        p = stand()
+        if t < 1.0:  # brush the dust off, left-right-left
+            k = math.sin(t * 16)
+            for side, sx, kk in (("a", -1, k), ("b", 1, -k)):
+                setattr(p, f"el_{side}", (sx * 0.38, 0.80, 0.12))
+                setattr(p, f"wr_{side}", (sx * 0.17, 0.50 + 0.07 * kk, 0.16))
+            p.head_rot, p.look = (0.38, 0, 0), (0.0, -1.0)
+            p.brows, p.mouth = "determined", "flat"
+        else:  # hands on hips: hmph
+            for side, sx in (("a", -1), ("b", 1)):
+                setattr(p, f"el_{side}", (sx * 0.56, 0.86, -0.04))
+                setattr(p, f"wr_{side}", (sx * 0.30, 0.66, 0.06))
+            p.head_rot, p.look = (-0.06, 0.2, 0.06), (0.5, 0.0)
+            p.brows, p.mouth, p.eyes = "determined", "small", "half"
         return p
 
     if state == "poked":

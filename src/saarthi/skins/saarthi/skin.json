@@ -8,6 +8,16 @@
       "fps": 10,
       "loop": true
     },
+    "idle.tired": {
+      "frames": "idle_tired/*.png",
+      "fps": 8,
+      "loop": true
+    },
+    "idle.hot": {
+      "frames": "idle_hot/*.png",
+      "fps": 10,
+      "loop": true
+    },
     "typing_fast": {
       "frames": "typing_fast/*.png",
       "fps": 12,
@@ -25,6 +35,36 @@
     },
     "watching": {
       "frames": "watching/*.png",
+      "fps": 8,
+      "loop": true
+    },
+    "watching.notes": {
+      "frames": "watching_notes/*.png",
+      "fps": 8,
+      "loop": true
+    },
+    "watching.chin": {
+      "frames": "watching_chin/*.png",
+      "fps": 8,
+      "loop": true
+    },
+    "watching.try": {
+      "frames": "watching_try/*.png",
+      "fps": 8,
+      "loop": true
+    },
+    "watching.popcorn": {
+      "frames": "watching_popcorn/*.png",
+      "fps": 8,
+      "loop": true
+    },
+    "watching.laugh": {
+      "frames": "watching_laugh/*.png",
+      "fps": 8,
+      "loop": true
+    },
+    "watching.sip": {
+      "frames": "watching_sip/*.png",
       "fps": 8,
       "loop": true
     },
@@ -60,6 +100,16 @@
     },
     "poked": {
       "frames": "poked/*.png",
+      "fps": 10,
+      "loop": false
+    },
+    "poked.boots": {
+      "frames": "poked_boots/*.png",
+      "fps": 10,
+      "loop": false
+    },
+    "poked.jeans": {
+      "frames": "poked_jeans/*.png",
       "fps": 10,
       "loop": false
     },
