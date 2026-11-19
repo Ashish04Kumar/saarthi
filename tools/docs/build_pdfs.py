@@ -29,8 +29,9 @@ def technical() -> list:
           P("Saarthi is a cross-platform desktop companion. A transparent, always-on-top character lives on the "
             "screen and reacts to what the user is doing (typing speed, scrolling, videos, idle time), keeps "
             "reminders, notes and a calendar, runs wellness sessions (breaks, lunch, guided breathing), shows "
-            "weather and the commute home, and can walk around the screen. Everything runs locally; the only network "
-            "calls are the optional weather, location, routing and calendar lookups listed in section 10."),
+            "weather and the commute home, watches the laptop itself (battery, charger, heat, internet, audio, "
+            "monitors) and can walk around the screen. Everything runs locally; the only network calls are the "
+            "optional lookups listed in section 11."),
           P("2. Technology", "h1"),
           table([["Part", "Choice", "Why"],
                  ["Language", "Python 3.10+", "One codebase for Linux, Windows and macOS"],
@@ -40,6 +41,7 @@ def technical() -> list:
                  ["Linux D-Bus", "jeepney", "GNOME idle monitor and MPRIS media players"],
                  ["Windows media", "winrt Media.Control", "What the system media overlay is playing"],
                  ["Calendar", "icalendar, recurring-ical-events", "Read-only iCal feeds with recurrence"],
+                 ["Laptop sensors", "psutil (+ pactl / osascript)", "Battery, CPU load and temperature, uptime, audio"],
                  ["3D avatar tool", "numpy (dev only)", "Signed-distance-field raymarcher that renders sprite frames"],
                  ["Docs", "reportlab", "These PDFs"]], [34, 52, 88])]
 
@@ -47,13 +49,15 @@ def technical() -> list:
           P("The app is a single Qt process. <b>Saarthi</b> (app.py) owns the window, speech bubble, tray "
             "menu and the state machine, and wires together four helpers: <b>Organizer</b> (reminders, notes, "
             "calendar, quotes, cards), <b>Outdoor</b> (weather, commute), <b>Wellness</b> (break, lunch, "
-            "breathing, status) and <b>Walker</b> (moving the window). Activity sources run their own threads and "
+            "breathing, status), <b>Walker</b> (moving the window) and <b>LaptopReactions</b> (battery, heat, "
+            "internet, audio, monitors). Activity sources run their own threads and "
             "are polled; network calls run on worker threads and report back through Qt signals."),
           table([["Module", "Responsibility"],
                  ["__main__.py", "CLI (--demo, --snapshot, --quit), single-instance check, X11 on Wayland"],
                  ["app.py", "Main controller: tick loop, speech queue, clicks, menus, quiet mode, Try features"],
                  ["states.py", "States, thresholds, StateMachine (hysteresis, transient states, fallbacks)"],
-                 ["window.py", "Transparent window, 30 fps painting, squash/breath scaling, mirroring, drag"],
+                 ["window.py", "Transparent window, 30 fps painting, squash/breath scaling, mirroring, drag, "
+                  "pixel-exact clicks, click-through mask, body/shoes/jeans zones, battery badge"],
                  ["bubble.py / card.py", "Speech bubble; pop-up cards with action buttons"],
                  ["quick_panel.py", "Double-click panel: status, quick actions, reminders, notes, today"],
                  ["manager.py / settings_tab.py", "Full window: Reminders, Notes, Calendar, Quotes, Settings"],
@@ -62,8 +66,11 @@ def technical() -> list:
                  ["ical_sync.py", "Fetch + expand iCal feeds"],
                  ["wellness.py, wellness_logic.py", "Break / lunch / breathing sessions, typing streaks"],
                  ["walker.py", "Random strolls, break and lunch pacing, return home"],
+                 ["laptop.py", "LaptopProbe thread (sensors) and LaptopWatch (thresholds, cool-downs → events)"],
+                 ["laptop_react.py", "Lines, battery badge, tired / hot looks, moving to the bigger monitor"],
                  ["outdoor.py, weather.py, commute.py, net.py", "Weather, outfits, rain warning, routing"],
-                 ["skin.py, mascot.py", "Skin loading (folders/GIF/sprite sheets); procedural mascot"],
+                 ["skin.py, mascot.py", "Skin loading (folders/GIF/sprite sheets, optional state.take "
+                  "animations); procedural mascot"],
                  ["theme.py, onboarding.py, system.py", "Dark/light theme; first-run help; autostart, single instance"],
                  ["tools/avatar/", "3D avatar renderer (engine, model, poses, build_skin)"]], [56, 118])]
 
@@ -76,6 +83,9 @@ def technical() -> list:
                  ["Stroll check", "15 s", "18% chance to stroll when idle and nothing is open"],
                  ["Commute check", "60 s", "Logout alert window"],
                  ["Activity poller thread", "1 s / 2 s", "Idle time; window title + media every 2 s"],
+                 ["Laptop probe thread", "5 s / 15 s", "Battery, CPU, temperature, audio; internet every 15 s"],
+                 ["Laptop reactions", "5 s", "LaptopWatch events → lines, badge, tired / hot look"],
+                 ["Click-through mask", "120 ms", "Window input shape follows the drawn character"],
                  ["Calendar sync", "15 min", "Re-download iCal feeds on a worker thread"],
                  ["Weather", "30 min", "Open-Meteo forecast, outfit, rain warning"],
                  ["Chit-chat", "20–40 min", "A random line (low priority)"]], [40, 30, 104])]
@@ -98,7 +108,9 @@ def technical() -> list:
                  ["Hysteresis", "A new state must hold 1.2 s (away/asleep switch immediately)"],
                  ["Transient states", "waking 2.5 s, happy 2.5 s, alert 8 s, poked 1.6 s, giggle 2 s"],
                  ["Sessions", "break, lunch (eat → think), breathe: held until the session ends"],
-                 ["Fallbacks", "Missing skin states fall back, e.g. typing_fast → typing_slow → idle, eat → break"]],
+                 ["Fallbacks", "Missing skin states fall back, e.g. typing_fast → typing_slow → idle, eat → break"],
+                 ["Takes", "Optional alternative animations per state: watching (study: notes, chin, try; other: "
+                  "popcorn, laugh, sip, switched every 25–50 s), idle (tired, hot), poked (boots, jeans)"]],
                 [48, 126])]
 
     s += [P("6. Who goes first (arbitration)", "h1"),
@@ -109,7 +121,8 @@ def technical() -> list:
               "<b>Sessions</b> (break, lunch, breathing) suppress non-forced speech, quotes, chatter and strolls. "
               "Reminder cards still appear; the session keeps running.",
               "<b>User first.</b> Mouse-down cancels any walk; single click is delayed by the double-click "
-              "interval so a double-click never triggers a poke.",
+              "interval so a double-click never triggers a poke. Only the character's own pixels take clicks "
+              "(a 3 px margin); the rest of the window is masked so clicks reach the app behind.",
               "<b>Quiet mode</b> (screen share) shrinks the buddy to 90 px in the corner, hides bubbles, cards, "
               "panel and tray messages, and blocks offers and strolls. Cards created meanwhile are kept hidden and "
               "shown when quiet mode ends.",
@@ -146,7 +159,27 @@ def technical() -> list:
             "second (0.55× for lunch strolls) and shows the WALK animation, mirrored when walking left. Break and "
             "lunch pacing remembers the home position and walks back when the session ends.")]
 
-    s += [P("10. Network services", "h1"),
+    s += [P("10. Laptop watch", "h1"),
+          P("A background thread reads the machine every 5 s; LaptopWatch turns readings into events with "
+            "thresholds and cool-downs, so each thing is said once, not every tick. Turn it all off with "
+            "<b>Laptop alerts</b> in the menu."),
+          table([["Event", "Rule", "Reaction"],
+                 ["Battery low", "Unplugged and ≤ 15%, then ≤ 10% (once each)", "Tired idle take, red badge, line"],
+                 ["Battery critical", "Unplugged and ≤ 5%, repeats every 2 min", "Blinking badge, alert sign, loud line"],
+                 ["Charger in / out", "power_plugged changes", "Happy + green ⚡ badge / line with %"],
+                 ["Battery full", "Plugged and 100% (once per charge)", "“Unplug the charger”"],
+                 ["Laptop hot", "CPU ≥ 85% averaged over 90 s, or sensor ≥ 88 °C; 15 min cool-down",
+                  "Hot idle take (fanning, sweat)"],
+                 ["Internet down / up", "TCP connect to 1.1.1.1 / 8.8.8.8:53; two readings in a row",
+                  "Line; “back” says how long it was gone"],
+                 ["Uptime", "≥ 3 days since boot; once a day, not in the first 10 min", "“Restart once”"],
+                 ["Headphones", "Default sink / port name (Linux pactl)", "Music-note line"],
+                 ["Mute / loud", "Mute toggled; volume crosses 100%", "Short line"],
+                 ["Late night", "00:00–04:59 while you're active; every 45 min", "“Go to sleep”"],
+                 ["Monitor plugged in", "Qt screenAdded", "Moves to the largest screen; returns if it's unplugged"]],
+                [32, 82, 60])]
+
+    s += [P("11. Network services", "h1"),
           table([["Service", "Used for", "Key"],
                  ["Open-Meteo", "Weather forecast and city search", "none"],
                  ["ipapi.co / ipinfo.io", "Approximate city from IP (only in automatic mode)", "none"],
@@ -155,25 +188,30 @@ def technical() -> list:
                  ["Google Maps links", "Pasted links are expanded to read the pinned coordinates", "none"],
                  ["TomTom Routing", "Live traffic", "free key"],
                  ["Google Routes API", "Live traffic", "billing key"],
-                 ["iCal links", "Google / Outlook / Apple calendar (read-only)", "secret link"]], [40, 104, 30])]
+                 ["iCal links", "Google / Outlook / Apple calendar (read-only)", "secret link"],
+                 ["1.1.1.1 / 8.8.8.8", "Online check: opens a TCP connection every 15 s, sends nothing", "none"]],
+                [40, 104, 30])]
 
-    s += [P("11. Data and configuration", "h1"),
+    s += [P("12. Data and configuration", "h1"),
           table([["OS", "Config + data folder", "Installed app"],
                  ["Linux", "~/.config/saarthi/", "~/.local/share/saarthi/venv"],
                  ["Windows", "%APPDATA%\\Saarthi\\", "%LOCALAPPDATA%\\Saarthi\\venv"],
                  ["macOS", "~/Library/Application Support/Saarthi/", "…/Saarthi/app/venv"]], [24, 80, 70]),
-          P("config.json holds settings (skin, size, language, theme, weather, commute, wellness, walking). "
+          P("config.json holds settings (skin, size, language, theme, weather, commute, wellness, walking, "
+            "laptop alerts). "
             "data.json holds reminders, notes, events, feeds, quote lists, reminder history and cached feed events. "
             "Both are written atomically (temp file + rename). Custom skins live in the <i>skins/</i> sub-folder.")]
 
-    s += [P("12. Skins and the 3D avatar", "h1"),
+    s += [P("13. Skins and the 3D avatar", "h1"),
           P("A skin is a folder with <i>skin.json</i> and frames per state (PNG sequence, GIF or sprite sheet). "
             "The avatar tool renders a full-body character with a numpy signed-distance-field raymarcher: "
             "spheres, capsules, ellipsoids and boxes combined with smooth unions, toon shading, ambient occlusion, "
             "rim light and outlines, at 2× supersampling. Appearance is a <i>Look</i> (skin, hair, beard, shirt, "
-            "slim, sleeves, watch …) and each state is a <i>Pose</i> function of time."),
+            "slim, sleeves, watch …) and each state is a <i>Pose</i> function of time. Extra takes use "
+            "<i>state.take</i> keys (e.g. <i>watching.notes</i>, frames in <i>watching_notes/</i>); props include "
+            "laptop, popcorn, notebook and pen, soda cup, tiffin, chai and thought bubbles."),
           code("python tools/avatar/build_skin.py ~/.config/saarthi/skins/me --name \"Me\""),
-          P("13. Packaging, startup and control", "h1"),
+          P("14. Packaging, startup and control", "h1"),
           bullets([
               "install.sh (Linux/macOS) and install.ps1 / install.bat (Windows) create a private virtualenv, "
               "add an app-menu entry / ~/Applications app / Start-menu shortcut, and start the app. "
@@ -181,18 +219,22 @@ def technical() -> list:
               "Start with the computer: ~/.config/autostart (Linux), HKCU Run key (Windows), LaunchAgent (macOS).",
               "Single instance through a QLocalServer: launching again shows the running buddy; "
               "<i>saarthi --quit</i> asks it to close."]),
-          P("14. Tests", "h1"),
-          P("53 automated tests (pytest): state machine, rate counters, media classification, evdev event "
+          P("15. Tests", "h1"),
+          P("70 automated tests (pytest): state machine, rate counters, media classification, evdev event "
             "handling, scheduler maths, iCal parsing, weather/route parsing, Maps links, autostart, typing streaks, "
+            "laptop thresholds (battery levels, charger, heat, internet, uptime, audio, late night), click zones "
+            "and pixel hit-testing, watching takes, "
             "and 13 end-to-end scenarios on a real offscreen buddy (speech priorities, sessions vs reminders, typing "
             "cancels a break, lunch flow, minutes picker, quiet mode, panel ↔ full-window sync, delete, walking guards)."),
           code("pip install -e \".[dev]\"\npytest\nruff check src tests"),
-          P("15. Known limitations", "h1"),
+          P("16. Known limitations", "h1"),
           bullets([
               "Windows and macOS code paths are written but not yet tested on real machines.",
               "Linux Wayland needs the input group for typing detection; the window runs via XWayland.",
               "Free commute times are estimates; live traffic needs a TomTom or Google key.",
-              "Calendar sync is read-only."])]
+              "Calendar sync is read-only.",
+              "Headphone and volume detection: Linux (pactl) and macOS (volume only); not on Windows yet. "
+              "CPU temperature is read on Linux; elsewhere heat is judged from CPU load."])]
     return s
 
 
@@ -218,6 +260,9 @@ def features() -> list:
           table([["Do this", "What happens"],
                  ["Single click on the head", "“Oye!”: rubs its head"],
                  ["Single click on the body", "Giggles (tickled)"],
+                 ["Click on the shoes", "Hops holding the foot: “Aaah mera pair!”"],
+                 ["Click on the jeans", "Brushes them off, hands on hips: “Jeans pe daag lag jayega!”"],
+                 ["Click next to it (empty space)", "Nothing: the click goes to the window behind"],
                  ["Click 4 times in 3 s", "Gets dizzy"],
                  ["Double-click", "Opens the panel: status, quick actions, reminders, notes, today"],
                  ["Right-click", "The menu (status, quiet mode, Try features, settings …)"],
@@ -230,7 +275,8 @@ def features() -> list:
                  ["Typing fast", "Types furiously, sweats"],
                  ["Typing slowly / thinking", "Hand on chin, thought bubble"],
                  ["Scrolling", "Eyes go up and down"],
-                 ["Video or tutorial playing", "Popcorn; lines for Udemy, tutorials, YouTube"],
+                 ["Tutorial / course playing", "Takes notes, hand on chin, or pauses to try the code (no popcorn)"],
+                 ["Any other video", "Popcorn, laughs, or sips a cold drink; switches every 25–50 s"],
                  ["Music playing", "Sometimes comments on the music"],
                  ["3 min no input / 15 min", "Dozes off / falls asleep (Zzz)"],
                  ["You come back", "Jumps up: “Aa gaye!”"],
@@ -242,7 +288,8 @@ def features() -> list:
                  ["Every 20–40 min", "A random fun line (skipped if something important is showing)"],
                  ["Idle, walking mode on", "Strolls along the bottom of the screen"],
                  ["15 min before logout (work days)", "Time to get home + traffic"],
-                 ["Every 30 min", "Weather update; warns before rain"]], [62, 112])]
+                 ["Every 30 min", "Weather update; warns before rain"],
+                 ["Battery, charger, heat, internet …", "See section 9: Laptop"]], [62, 112])]
 
     s += [KeepTogether([P("4. Status: Working, Break, Lunch", "h1"),
                         image("minutes-picker.png", 70,
@@ -290,7 +337,25 @@ def features() -> list:
               "Settings → Office to home traffic: home, office (address or a Google Maps link), logout time, work "
               "days, car or two-wheeler, and data source (free estimate, TomTom or Google with a key)."])]
 
-    s += [P("9. Checking that everything works", "h1"),
+    s += [P("9. Laptop", "h1"),
+          P("Saarthi also keeps an eye on the laptop. Each thing is said once, not again and again; turn it all "
+            "off with <b>Laptop alerts</b> in the right-click menu."),
+          table([["When", "What it does"],
+                 ["Battery below 15% and 10%", "Looks tired (yawns), red battery icon by its head: “Charger lagao bhai”"],
+                 ["Battery below 5%", "Icon blinks, holds up the sign, says it loudly; again every 2 min"],
+                 ["Charger plugged in", "Jumps happily, green ⚡ icon: “Aah, energy aa gayi ⚡”"],
+                 ["Charger unplugged", "Tells you the battery %"],
+                 ["Battery at 100%", "“Charger nikaal do, battery ki umar badhegi”"],
+                 ["CPU busy or laptop hot", "Fans himself and sweats"],
+                 ["Internet gone / back", "“Net chala gaya” / “Net wapas aa gaya (3 min gayab tha)”"],
+                 ["3+ days without restart", "Suggests a restart, once a day"],
+                 ["Headphones in / out", "music-note line (Linux, macOS)"],
+                 ["Muted / volume past 100%", "“Shhh” / “Kaanon ka dhyan rakho”"],
+                 ["Working after midnight", "“So jao yaar, kal karna” (every 45 min)"],
+                 ["Second monitor plugged in", "Moves to the bigger screen; comes back if it's unplugged"]],
+                [56, 118])]
+
+    s += [P("10. Checking that everything works", "h1"),
           P("<b>Right-click → What I see…</b> shows live:"),
           table([["Field", "Meaning"],
                  ["Typing & scroll / Idle time / Video", "Which detector is active on your system"],
@@ -301,9 +366,11 @@ def features() -> list:
                  ["Walking, Next reminder/event", "Walking status; the next thing on your schedule"]], [62, 112]),
           P("<b>Right-click → Try features</b> triggers any feature on demand: each activity for 10 s, poke, "
             "tickle, dizzy, walk, a demo reminder, an event alert, the morning brief, a quote, a break offer, a "
-            "1-minute break, breathing, weather, rain warning, traffic and outfits.")]
+            "1-minute break, breathing, weather, rain warning, traffic and outfits; shoes and jeans clicks; and "
+            "<b>Laptop</b>: battery low / critical, charger in / out, full, hot, internet gone / back, restart, "
+            "headphones, mute, loud volume, after midnight, second monitor.")]
 
-    s += [P("10. Troubleshooting", "h1"),
+    s += [P("11. Troubleshooting", "h1"),
           table([["Problem", "Fix"],
                  ["Typing has no effect (Linux Wayland)", "Join the input group and log out/in (see section 1). "
                                                           "Menu → Fix typing detection… explains it."],
@@ -311,11 +378,13 @@ def features() -> list:
                  ["macOS ignores typing", "System Settings → Privacy & Security → Accessibility and Input "
                                           "Monitoring → allow Saarthi / Python, then restart it"],
                  ["Two buddies?", "Not possible: launching again just shows the running one"],
-                 ["Want silence", "Quiet mode, or turn off Speech bubbles in the menu"]], [56, 118]),
-          P("11. Privacy", "h1"),
+                 ["Want silence", "Quiet mode, or turn off Speech bubbles in the menu"],
+                 ["Too many laptop lines", "Right-click → untick Laptop alerts"]], [56, 118]),
+          P("12. Privacy", "h1"),
           P("Saarthi counts how fast you type, never what you type. Your notes, reminders and settings stay in "
             "your config folder. Network use: weather, approximate location (automatic mode only), routes, address "
-            "search when you press Search, and calendar links you add.")]
+            "search when you press Search, calendar links you add, and an online check (a connection to 1.1.1.1, "
+            "nothing sent) for the internet line.")]
     return s
 
 
