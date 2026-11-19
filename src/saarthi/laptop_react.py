@@ -6,7 +6,7 @@ from __future__ import annotations
 import time
 from datetime import datetime
 
-from PySide6.QtCore import QTimer
+from PySide6.QtCore import QObject, QTimer, Signal
 
 from .laptop import BATTERY_CRITICAL, CPU_HOT_C, LaptopProbe, LaptopWatch
 from .lines import line_for
@@ -18,17 +18,26 @@ URGENT = {"battery_low", "battery_critical"}
 IMPORTANT = {"charger_in", "charger_out", "battery_full", "cpu_hot", "net_down", "net_up", "late_night"}
 
 
+class _Bridge(QObject):
+    changed = Signal()  # emitted from the probe thread, delivered on the UI thread
+
+
 class LaptopReactions:
     def __init__(self, buddy):
         self.b = buddy
         self.watch = LaptopWatch(started=time.monotonic())
         self.probe = LaptopProbe()
+        self._bridge = _Bridge()
+        self._bridge.changed.connect(self.tick)
+        self.probe.on_change = self._bridge.changed.emit  # react the moment the probe sees a change
         if not buddy.demo:  # demo mode (and tests) fake everything; the Try menu still works
             self.probe.start()
         self._flash: tuple[str, float] | None = None  # (badge, until)
         self._sim: tuple[str | None, float, str | None, float] | None = None  # (badge, %, idle take, until)
+        self._power_seen = self._net_seen = 0
+        self._snap_seen: object = None
         self.timer = QTimer(timeout=self.tick)
-        self.timer.start(5000)
+        self.timer.start(1000)  # only for badge / Try-menu timeouts; changes arrive through on_change
         app = buddy.app
         app.screenAdded.connect(lambda _s: QTimer.singleShot(1500, self.to_big_screen))
         app.screenRemoved.connect(lambda _s: QTimer.singleShot(1500, self._still_on_screen))
@@ -40,18 +49,35 @@ class LaptopReactions:
     # ---- loop ----
     def tick(self) -> None:
         now = time.monotonic()
+        on = self.b.cfg["laptop_alerts"]
+        events: list[tuple[str, dict]] = []
+        power, seq = self.probe.power, self.probe.power_seq
+        if seq != self._power_seen and power is not None:
+            self._power_seen = seq
+            ev = self.watch.power(power[0], power[1], now)
+            events += ev if on else []
+        net, nseq = self.probe.net, self.probe.net_seq
+        if nseq != self._net_seen and net is not None:
+            self._net_seen = nseq
+            ev = self.watch.net(net, now)
+            events += ev if on else []
         snap = self.probe.latest
-        if snap is not None and self.b.cfg["laptop_alerts"]:
+        if snap is not None and snap is not self._snap_seen:
+            self._snap_seen = snap
             a = getattr(self.b, "activity", None)
             active = a is not None and a.idle_seconds < 120
-            for name, kw in self.watch.update(snap, now, datetime.now().hour, active):
-                self.react(name, kw)
+            ev = self.watch.update(snap, now, datetime.now().hour, active)
+            events += ev if on else []
+        for name, kw in events:
+            self.react(name, kw)
         self.refresh_looks(now)
 
     def react(self, name: str, kw: dict) -> None:
         key = name
         if name == "cpu_hot" and kw.get("temp") is not None and kw["temp"] >= CPU_HOT_C:
             key = "cpu_hot_temp"
+        if name == "net_up" and kw.get("mins", 0) >= 2:
+            key = "net_up_long"
         text = line_for(key, self.b.cfg["language"])
         if not text:
             return
@@ -60,6 +86,8 @@ class LaptopReactions:
         if name == "charger_in":
             self._flash = ("charging", now + FLASH_SECONDS)
             self._cheer(now)
+        elif name == "charger_out":
+            self._flash = None  # unplugged: drop the green badge at once
         elif name == "battery_full":
             self._flash = ("full", now + FLASH_SECONDS)
         if name in URGENT:
@@ -77,8 +105,7 @@ class LaptopReactions:
             win.set_badge(None)
             win.set_variant(State.IDLE, None)
             return
-        snap = self.probe.latest
-        pct = snap.battery if snap is not None and snap.battery is not None else 0.0
+        pct = self.probe.power[0] if self.probe.power is not None else 0.0
         badge, take = None, None
         if self._sim is not None and now < self._sim[3]:
             badge, pct, take = self._sim[0], self._sim[1], self._sim[2]

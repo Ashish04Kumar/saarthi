@@ -30,7 +30,8 @@ reminders and notes, takes breaks and lunch with you, breathes with you, and tel
 - **Watches the laptop too**: battery below 15% / 10% (tired look and a red battery icon), loud at 5%;
   happy when you plug in, "unplug at 100%"; fans itself when the CPU runs hot; internet gone / back;
   "restart, it's been 3 days"; headphones in/out; mute and volume past 100%; "go to sleep" after
-  midnight; moves to the bigger screen when you plug in a monitor
+  midnight; moves to the bigger screen when you plug in a monitor. On Linux it reacts the moment the system reports a
+  change (UPower, NetworkManager, `pactl subscribe`) instead of polling; CPU load is sampled every 5 s
 - **Status: Working / Break / Lunch**: pick the minutes; it goes on a chai break or eats lunch, then
   strolls and thinks; click the status again to end it, or change the time while it runs
 - **Breaks and guided breathing**: break after 50 min of work (cancelled if you keep typing on

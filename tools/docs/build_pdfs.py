@@ -83,8 +83,10 @@ def technical() -> list:
                  ["Stroll check", "15 s", "18% chance to stroll when idle and nothing is open"],
                  ["Commute check", "60 s", "Logout alert window"],
                  ["Activity poller thread", "1 s / 2 s", "Idle time; window title + media every 2 s"],
-                 ["Laptop probe thread", "5 s / 15 s", "Battery, CPU, temperature, audio; internet every 15 s"],
-                 ["Laptop reactions", "5 s", "LaptopWatch events → lines, badge, tired / hot look"],
+                 ["Laptop probe thread", "on change; 5 s", "Sleeps until the OS reports a change (UPower, "
+                  "NetworkManager, pactl); CPU and temperature sampled every 5 s; internet check every 15 s"],
+                 ["Laptop reactions", "on change", "Probe → Qt signal → lines, badge, tired / hot look "
+                  "(a 1 s timer only ends badges and Try-menu previews)"],
                  ["Click-through mask", "120 ms", "Window input shape follows the drawn character"],
                  ["Calendar sync", "15 min", "Re-download iCal feeds on a worker thread"],
                  ["Weather", "30 min", "Open-Meteo forecast, outfit, rain warning"],
@@ -160,9 +162,18 @@ def technical() -> list:
             "lunch pacing remembers the home position and walks back when the session ends.")]
 
     s += [P("10. Laptop watch", "h1"),
-          P("A background thread reads the machine every 5 s; LaptopWatch turns readings into events with "
-            "thresholds and cool-downs, so each thing is said once, not every tick. Turn it all off with "
-            "<b>Laptop alerts</b> in the menu."),
+          P("A background thread keeps the readings and LaptopWatch turns them into events with thresholds and "
+            "cool-downs, so each thing is said once, not every tick. Turn it all off with <b>Laptop alerts</b> in "
+            "the menu."),
+          P("Event-driven, not polling", "h2"),
+          table([["Source", "Linux event", "Elsewhere (for now)"],
+                 ["Charger, battery", "UPower PropertiesChanged on the system D-Bus (only Online / State / a whole "
+                  "1% change; the per-second power-draw updates while charging are ignored)", "psutil every 1 s"],
+                 ["Wi-Fi / LAN", "NetworkManager signals; a lost default route means offline at once", "psutil every 1 s"],
+                 ["Headphones, volume, mute", "pactl subscribe (sink / server / card events)", "macOS: osascript every 5 s"],
+                 ["CPU load, temperature", "no event exists: sampled every 5 s", "same"]], [34, 100, 40]),
+          P("Measured on the development laptop: 2 wake-ups in 10 idle seconds (the CPU sample). Every quick "
+            "plug / unplug or Wi-Fi off / on gets its own reaction, and a newer line replaces the older one."),
           table([["Event", "Rule", "Reaction"],
                  ["Battery low", "Unplugged and ≤ 15%, then ≤ 10% (once each)", "Tired idle take, red badge, line"],
                  ["Battery critical", "Unplugged and ≤ 5%, repeats every 2 min", "Blinking badge, alert sign, loud line"],
@@ -170,10 +181,11 @@ def technical() -> list:
                  ["Battery full", "Plugged and 100% (once per charge)", "“Unplug the charger”"],
                  ["Laptop hot", "CPU ≥ 85% averaged over 90 s, or sensor ≥ 88 °C; 15 min cool-down",
                   "Hot idle take (fanning, sweat)"],
-                 ["Internet down / up", "TCP connect to 1.1.1.1 / 8.8.8.8:53; two readings in a row",
-                  "Line; “back” says how long it was gone"],
+                 ["Internet down / up", "No route: offline at once. Route back: TCP connect to 1.1.1.1 / "
+                  "8.8.8.8:53 every 2 s until it answers, then every 15 s; one failed check alone is ignored",
+                  "Line; after 2+ min away it says how long"],
                  ["Uptime", "≥ 3 days since boot; once a day, not in the first 10 min", "“Restart once”"],
-                 ["Headphones", "Default sink / port name (Linux pactl)", "Music-note line"],
+                 ["Headphones", "Default sink / port name, re-read on pactl events", "Music-note line"],
                  ["Mute / loud", "Mute toggled; volume crosses 100%", "Short line"],
                  ["Late night", "00:00–04:59 while you're active; every 45 min", "“Go to sleep”"],
                  ["Monitor plugged in", "Qt screenAdded", "Moves to the largest screen; returns if it's unplugged"]],
@@ -220,9 +232,9 @@ def technical() -> list:
               "Single instance through a QLocalServer: launching again shows the running buddy; "
               "<i>saarthi --quit</i> asks it to close."]),
           P("15. Tests", "h1"),
-          P("70 automated tests (pytest): state machine, rate counters, media classification, evdev event "
+          P("72 automated tests (pytest): state machine, rate counters, media classification, evdev event "
             "handling, scheduler maths, iCal parsing, weather/route parsing, Maps links, autostart, typing streaks, "
-            "laptop thresholds (battery levels, charger, heat, internet, uptime, audio, late night), click zones "
+            "laptop thresholds (battery levels, quick charger toggles, heat, Wi-Fi drop and reconnect retries, uptime, audio, late night), click zones "
             "and pixel hit-testing, watching takes, "
             "and 13 end-to-end scenarios on a real offscreen buddy (speech priorities, sessions vs reminders, typing "
             "cancels a break, lunch flow, minutes picker, quiet mode, panel ↔ full-window sync, delete, walking guards)."),
@@ -234,7 +246,10 @@ def technical() -> list:
               "Free commute times are estimates; live traffic needs a TomTom or Google key.",
               "Calendar sync is read-only.",
               "Headphone and volume detection: Linux (pactl) and macOS (volume only); not on Windows yet. "
-              "CPU temperature is read on Linux; elsewhere heat is judged from CPU load."])]
+              "CPU temperature is read on Linux; elsewhere heat is judged from CPU load.",
+              "Instant laptop events are Linux-only so far; Windows and macOS check once a second. Planned: "
+              "WM_POWERBROADCAST, NotifyAddrChange and Core Audio callbacks on Windows; IOKit power and "
+              "network-reachability notifications on macOS."])]
     return s
 
 
@@ -338,8 +353,9 @@ def features() -> list:
               "days, car or two-wheeler, and data source (free estimate, TomTom or Google with a key)."])]
 
     s += [P("9. Laptop", "h1"),
-          P("Saarthi also keeps an eye on the laptop. Each thing is said once, not again and again; turn it all "
-            "off with <b>Laptop alerts</b> in the right-click menu."),
+          P("Saarthi also keeps an eye on the laptop. On Linux it reacts the instant something changes (the "
+            "system tells it; it doesn't keep asking), even if you plug and unplug quickly. Each thing is said "
+            "once, not again and again; turn it all off with <b>Laptop alerts</b> in the right-click menu."),
           table([["When", "What it does"],
                  ["Battery below 15% and 10%", "Looks tired (yawns), red battery icon by its head: “Charger lagao bhai”"],
                  ["Battery below 5%", "Icon blinks, holds up the sign, says it loudly; again every 2 min"],
@@ -347,7 +363,8 @@ def features() -> list:
                  ["Charger unplugged", "Tells you the battery %"],
                  ["Battery at 100%", "“Charger nikaal do, battery ki umar badhegi”"],
                  ["CPU busy or laptop hot", "Fans himself and sweats"],
-                 ["Internet gone / back", "“Net chala gaya” / “Net wapas aa gaya (3 min gayab tha)”"],
+                 ["Wi-Fi off / internet gone", "At once: “Net chala gaya”"],
+                 ["Internet back", "As soon as it answers: “Net wapas aa gaya”; after 2+ min it says how long"],
                  ["3+ days without restart", "Suggests a restart, once a day"],
                  ["Headphones in / out", "music-note line (Linux, macOS)"],
                  ["Muted / volume past 100%", "“Shhh” / “Kaanon ka dhyan rakho”"],

@@ -50,15 +50,48 @@ def test_hot_needs_sustained_load_or_high_temp():
     assert names(w2.update(Snapshot(cpu=10, temp=92), 0)) == ["cpu_hot"]
 
 
-def test_internet_needs_two_readings_and_no_event_at_start():
+def test_internet_changes_are_immediate_and_silent_at_start():
     w = LaptopWatch()
-    assert w.update(Snapshot(online=True), 0) == [] and w.update(Snapshot(online=True), 15) == []
-    assert w.update(Snapshot(online=False), 30) == []  # one blip
-    assert w.update(Snapshot(online=True), 45) == []
-    w.update(Snapshot(online=False), 60)
-    assert names(w.update(Snapshot(online=False), 75)) == ["net_down"]
-    w.update(Snapshot(online=True), 255)
-    assert w.update(Snapshot(online=True), 270) == [("net_up", {"mins": 3})]
+    assert w.net(True, 0) == [] and w.net(True, 1) == []
+    assert w.net(False, 2) == [("net_down", {})]
+    assert w.net(True, 3) == [("net_up", {"mins": 0})]  # quick toggles each get their line
+    assert w.net(False, 4) == [("net_down", {})]
+    assert w.net(True, 184) == [("net_up", {"mins": 3})]
+
+
+def test_power_reacts_to_every_quick_toggle():
+    w = LaptopWatch()
+    assert w.power(50, False, 0) == []
+    seq = [w.power(50, p, t) for t, p in enumerate((True, False, True, False), 1)]
+    assert [names(e) for e in seq] == [["charger_in"], ["charger_out"], ["charger_in"], ["charger_out"]]
+
+
+def test_probe_sees_wifi_drop_at_once_and_retries_after_reconnect(monkeypatch):
+    from saarthi import laptop
+
+    link = {"up": True}
+    answers = []
+    monkeypatch.setattr(laptop, "has_link", lambda _ps=None: link["up"])
+    monkeypatch.setattr(laptop, "online", lambda timeout=2.0: answers.pop(0) if answers else True)
+    started = []
+    monkeypatch.setattr(
+        laptop.threading,
+        "Thread",
+        lambda target, **kw: type("T", (), {"start": lambda self: (started.append(1), target())})(),
+    )
+    p = laptop.LaptopProbe()
+    p.watch_net(None)
+    assert p.net is True
+    link["up"] = False
+    p.watch_net(None)
+    assert p.net is False  # Wi-Fi off: no waiting for a check
+    link["up"] = True
+    answers[:] = [False]  # DHCP not ready yet
+    p.watch_net(None)
+    assert p.net is False and p._net_at - laptop.time.monotonic() < 2.5  # tries again in 2 s
+    p._net_at = 0
+    p.watch_net(None)
+    assert p.net is True
 
 
 def test_uptime_late_night_audio():
