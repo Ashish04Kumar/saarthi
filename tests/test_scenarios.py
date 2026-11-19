@@ -209,7 +209,7 @@ def test_quiet_mode_hides_everything_and_comes_back(buddy):
     reset(buddy)
     pos, size = buddy.win.pos(), buddy.win.height()
     buddy.set_quiet(True)
-    assert buddy.win.height() == 90  # small, in the corner
+    assert buddy.win.height() == 90 + buddy.win.credit_height()  # small, in the corner
     buddy.say("hello", force=True)
     assert not buddy.bubble.isVisible()  # silent, even for important lines
     buddy.org.show_reminder(Reminder("Demo", "2026-01-01T10:00"), demo=True)

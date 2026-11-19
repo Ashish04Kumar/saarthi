@@ -21,7 +21,9 @@ def technical() -> list:
     s: list = []
     s += [P("Saarthi", "title"),
           P("Technical documentation: architecture, how each part works, data, packaging and tests", "subtitle"),
-          image("states.png", 150, "The built-in mascot “Bit” in all 18 states (sprite skins can replace it).")]
+          image("avatar-states.png", 150, "The default 3D character “Saarthi” in all 18 states."),
+          P("Created by Ashish Kumar (ashishishere11@gmail.com). Bit, the cartoon robot, is the built-in "
+            "alternative; any sprite skin can replace both.", "small")]
 
     s += [P("1. Overview", "h1"),
           P("Saarthi is a cross-platform desktop companion. A transparent, always-on-top character lives on the "
@@ -199,7 +201,8 @@ def features() -> list:
     s: list = []
     s += [P("Saarthi", "title"),
           P("Features and user guide: what it does, when it runs, how to use and track everything", "subtitle"),
-          image("panel.png", 80, "The double-click panel (dark theme).")]
+          image("panel.png", 80, "The double-click panel (dark theme)."),
+          P("Created by Ashish Kumar (ashishishere11@gmail.com).", "small")]
 
     s += [P("1. Install, start and stop", "h1"),
           table([["", "Linux / macOS", "Windows"],

@@ -14,6 +14,8 @@ from .states import State
 from .wellness_logic import breath_phase
 
 FPS = 30
+CREDIT_STRIP = 28  # px under the character for the developer credit
+MIN_CREDIT_WIDTH = 170
 
 
 class BuddyWindow(QWidget):
@@ -24,7 +26,7 @@ class BuddyWindow(QWidget):
     drag_finished = Signal()
     context_menu = Signal(QPoint)
 
-    def __init__(self, skin: Skin, size: int):
+    def __init__(self, skin: Skin, size: int, credit: str | None = None):
         super().__init__(
             None,
             Qt.WindowType.FramelessWindowHint | Qt.WindowType.WindowStaysOnTopHint | Qt.WindowType.Tool,
@@ -40,6 +42,7 @@ class BuddyWindow(QWidget):
         self.override_speed = 1.0  # animation speed for the override (slow strolls)
         self.mirror = False
         self.t0 = time.monotonic()
+        self.credit = credit  # developer credit shown under the character (None = hidden)
         self.set_size(size)
         self._press: QPoint | None = None
         self._offset = QPoint()
@@ -69,8 +72,13 @@ class BuddyWindow(QWidget):
             sy *= 1 + 0.06 * level
         return sx, sy
 
+    def credit_height(self) -> int:
+        return CREDIT_STRIP if self.credit else 0
+
     def set_size(self, size: int) -> None:
-        self.setFixedSize(int(size * self.skin.aspect), size)
+        self.setFixedSize(
+            max(int(size * self.skin.aspect), MIN_CREDIT_WIDTH if self.credit else 0), size + self.credit_height()
+        )
 
     def set_skin(self, skin: Skin, size: int) -> None:
         self.skin = skin
@@ -91,8 +99,10 @@ class BuddyWindow(QWidget):
         now = time.monotonic()
         p = QPainter(self)
         p.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
+        if self.credit:
+            self._paint_credit(p)
         sx, sy = self._body_scale(now)
-        w, h = self.width(), self.height()
+        w, h = self.width(), self.height() - self.credit_height()
         if self.mirror:
             p.translate(w, 0)
             p.scale(-1, 1)
@@ -104,7 +114,32 @@ class BuddyWindow(QWidget):
             shown, t_state = self.override, (now - self.override_started) * self.override_speed
         else:
             shown, t_state = self.state, now - self.state_started
-        self.skin.paint(p, QRectF(self.rect()), shown, now - self.t0, t_state)
+        self.skin.paint(p, QRectF(0, 0, w, h), shown, now - self.t0, t_state)
+
+    def _paint_credit(self, p: QPainter) -> None:
+        """Small developer credit under the character."""
+        from PySide6.QtGui import QColor, QFont, QFontMetrics
+
+        w, strip = self.width(), self.credit_height()
+        top = self.height() - strip
+        p.save()
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        p.setPen(Qt.PenStyle.NoPen)
+        p.setBrush(QColor(20, 24, 40, 170))
+        p.drawRoundedRect(QRectF(2, top + 1, w - 4, strip - 2), 7, 7)
+        f = QFont()
+        f.setPixelSize(10 if w >= 200 else 8)
+        p.setFont(f)
+        p.setPen(QColor(255, 255, 255, 235))
+        fm = QFontMetrics(f)
+        name, _, email = self.credit.partition(" (")
+        lines = [name, "(" + email] if email else [name]
+        for i, line in enumerate(lines):
+            text = fm.elidedText(line, Qt.TextElideMode.ElideRight, w - 10)
+            p.drawText(
+                QRectF(4, top + 2 + i * (strip - 4) / 2, w - 8, (strip - 4) / 2), Qt.AlignmentFlag.AlignCenter, text
+            )
+        p.restore()
 
     # ---- dragging / clicks ----
     def mousePressEvent(self, e):
@@ -138,7 +173,7 @@ class BuddyWindow(QWidget):
         if self._dragging:
             self.drag_finished.emit()
         else:
-            self._click_y = e.position().y() / max(1, self.height())
+            self._click_y = e.position().y() / max(1, self.height() - self.credit_height())
             self._single.start(QApplication.doubleClickInterval())
         self._press = None
         self._dragging = False

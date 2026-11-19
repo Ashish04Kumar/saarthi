@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any
 
 DEFAULTS: dict[str, Any] = {
-    "skin": "builtin:bit",
+    "skin": "bundled:saarthi",  # the 3D Saarthi character; "builtin:bit" is the cartoon robot
     "size": 160,
     "position": None,  # [x, y] or None for bottom-right
     "language": "hinglish",
@@ -41,6 +41,7 @@ DEFAULTS: dict[str, Any] = {
     "breathing_cycles": 5,
     "walk_enabled": True,
     "lunch_minutes": 60,
+    "developer": False,  # the author's own machine: hides the developer credit
     "theme": "auto",  # auto / dark / light for Saarthi's own pop-ups
 }
 

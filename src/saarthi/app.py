@@ -47,7 +47,9 @@ class Saarthi:
         self.status_dialog = None
         app.aboutToQuit.connect(self.shutdown)
 
-        self.win = BuddyWindow(self.skin, self.cfg["size"])
+        from . import CREDIT
+
+        self.win = BuddyWindow(self.skin, self.cfg["size"], credit=None if self.cfg["developer"] else CREDIT)
         self.bubble = Bubble()
         self._bubble_prio = LOW
         self._speech: list[tuple[str, int | None, int]] = []
@@ -235,6 +237,19 @@ class Saarthi:
         for key, a in getattr(self, "status_actions", {}).items():
             a.setChecked(key == cur)
 
+    def show_about(self):
+        from PySide6.QtWidgets import QMessageBox
+
+        from . import AUTHOR, AUTHOR_EMAIL, __version__
+
+        QMessageBox.about(
+            None,
+            "About Saarthi",
+            f"<b>Saarthi {__version__}</b><br>Your animated desktop companion.<br><br>"
+            f"Developer: <b>{AUTHOR}</b><br><a href='mailto:{AUTHOR_EMAIL}'>{AUTHOR_EMAIL}</a><br>"
+            "<a href='https://github.com/Ashish04Kumar/saarthi'>github.com/Ashish04Kumar/saarthi</a>",
+        )
+
     def wake_from_launcher(self):
         """Launched again from the app menu while already running: just come forward."""
         self.win.show()
@@ -405,6 +420,7 @@ class Saarthi:
         bub.toggled.connect(lambda v: self.cfg.__setitem__("bubbles", v))
         m.addAction(bub)
         m.addSeparator()
+        m.addAction("About Saarthi", self.show_about)
         m.addAction("Quit", self.app.quit)
 
     # ---------- Try features ----------

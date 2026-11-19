@@ -133,10 +133,14 @@ def skin_dirs(user_dir: Path) -> list[Path]:
     return [BUNDLED_DIR, user_dir / "skins"]
 
 
+DEFAULT_SKIN = "bundled:saarthi"  # the 3D Saarthi character that ships with the app
+
+
 def discover(user_dir: Path) -> dict[str, str]:
-    """Return {skin_id: display name}."""
-    found = {"builtin:bit": "Bit (built-in)"}
-    for base in skin_dirs(user_dir):
+    """Return {skin_id: display name}. Bundled skins use 'bundled:<folder>' so the id works wherever
+    the app is installed; your own skins use 'folder:<path>'."""
+    found: dict[str, str] = {}
+    for base, prefix in ((BUNDLED_DIR, "bundled:"), (user_dir / "skins", "folder:")):
         if not base.is_dir():
             continue
         for d in sorted(base.iterdir()):
@@ -146,14 +150,24 @@ def discover(user_dir: Path) -> dict[str, str]:
                     name = json.loads(meta.read_text(encoding="utf-8")).get("name", d.name)
                 except ValueError:
                     continue
-                found[f"folder:{d}"] = name
+                found[f"{prefix}{d.name if prefix == 'bundled:' else d}"] = name
+    found["builtin:bit"] = "Bit (built-in)"
     return found
 
 
-def load(skin_id: str) -> Skin:
+def skin_path(skin_id: str) -> Path | None:
+    if skin_id.startswith("bundled:"):
+        return BUNDLED_DIR / skin_id[len("bundled:") :]
     if skin_id.startswith("folder:"):
+        return Path(skin_id[len("folder:") :])
+    return None
+
+
+def load(skin_id: str) -> Skin:
+    path = skin_path(skin_id)
+    if path is not None:
         try:
-            return SpriteSkin(Path(skin_id[len("folder:") :]))
+            return SpriteSkin(path)
         except (OSError, ValueError) as e:
             print(f"[saarthi] could not load skin {skin_id}: {e}; using Bit")
     from .mascot import BitSkin

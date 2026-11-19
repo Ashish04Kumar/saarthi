@@ -1,0 +1,97 @@
+{
+  "name": "Saarthi (3D)",
+  "author": "Ashish Kumar",
+  "fps": 10,
+  "states": {
+    "idle": {
+      "frames": "idle/*.png",
+      "fps": 10,
+      "loop": true
+    },
+    "typing_fast": {
+      "frames": "typing_fast/*.png",
+      "fps": 12,
+      "loop": true
+    },
+    "typing_slow": {
+      "frames": "typing_slow/*.png",
+      "fps": 8,
+      "loop": true
+    },
+    "scrolling": {
+      "frames": "scrolling/*.png",
+      "fps": 8,
+      "loop": true
+    },
+    "watching": {
+      "frames": "watching/*.png",
+      "fps": 8,
+      "loop": true
+    },
+    "afk": {
+      "frames": "afk/*.png",
+      "fps": 6,
+      "loop": true
+    },
+    "sleeping": {
+      "frames": "sleeping/*.png",
+      "fps": 6,
+      "loop": true
+    },
+    "waking": {
+      "frames": "waking/*.png",
+      "fps": 12,
+      "loop": false
+    },
+    "happy": {
+      "frames": "happy/*.png",
+      "fps": 12,
+      "loop": true
+    },
+    "stretch": {
+      "frames": "stretch/*.png",
+      "fps": 8,
+      "loop": true
+    },
+    "alert": {
+      "frames": "alert/*.png",
+      "fps": 8,
+      "loop": true
+    },
+    "poked": {
+      "frames": "poked/*.png",
+      "fps": 10,
+      "loop": false
+    },
+    "giggle": {
+      "frames": "giggle/*.png",
+      "fps": 12,
+      "loop": true
+    },
+    "break": {
+      "frames": "break/*.png",
+      "fps": 6,
+      "loop": true
+    },
+    "breathe": {
+      "frames": "breathe/*.png",
+      "fps": 4,
+      "loop": true
+    },
+    "walk": {
+      "frames": "walk/*.png",
+      "fps": 12,
+      "loop": true
+    },
+    "eat": {
+      "frames": "eat/*.png",
+      "fps": 8,
+      "loop": true
+    },
+    "think": {
+      "frames": "think/*.png",
+      "fps": 6,
+      "loop": true
+    }
+  }
+}

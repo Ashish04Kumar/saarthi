@@ -5,7 +5,9 @@ It lives on your screen and reacts to what you're doing: type fast and it sweats
 ponders, watch a tutorial and it grabs popcorn, walk away and it falls asleep. It also keeps your
 reminders and notes, takes breaks and lunch with you, breathes with you, and tells you the traffic home.
 
-![All states](docs/states.png)
+![Saarthi in all its states](docs/avatar-states.png)
+
+<sub>The default 3D character, Saarthi. Prefer a cartoon robot? Pick **Bit** from right-click → Character.</sub>
 
 | Platform | Status |
 |---|---|
@@ -20,8 +22,8 @@ reminders and notes, takes breaks and lunch with you, breathes with you, and tel
 
 - **Knows what you're doing**: fast/slow typing, scrolling (mouse or touchpad), videos and tutorials
   (YouTube, Udemy, Coursera…), music, away, asleep. Counts *how fast* you type, never *what*.
-- **18 animations**, a built-in mascot (Bit), your own skins, and a **3D avatar maker** for a
-  full-body character of yourself
+- **18 animations** with the 3D **Saarthi** character by default, the cartoon robot **Bit**, your own
+  skins, and a **3D avatar maker** for a full-body character of yourself
 - **Alive when you touch it**: poke its head, tickle its belly, click too much and it gets dizzy;
   drag it anywhere; **walking mode** strolls along your screen
 - **Status: Working / Break / Lunch**: pick the minutes; it goes on a chai break or eats lunch, then
@@ -345,6 +347,14 @@ the weather/traffic lookups described above (each can be turned off in Settings)
 5. ~~One-command installers for Linux, Windows and macOS~~
 6. Test and polish on real Windows and macOS machines
 7. Prebuilt downloads (.exe, AppImage, .dmg) via GitHub Actions, plugins, more languages
+
+## Credits
+
+Created by **Ashish Kumar** ([ashishishere11@gmail.com](mailto:ashishishere11@gmail.com),
+[@Ashish04Kumar](https://github.com/Ashish04Kumar)). The app shows this credit under the character
+and in right-click → *About Saarthi*.
+
+![Developer credit](docs/credit.png)
 
 ## License
 
