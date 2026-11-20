@@ -20,10 +20,14 @@ reminders and notes, takes breaks and lunch with you, breathes with you, and tel
 
 ## Features
 
-- **Knows what you're doing**: fast/slow typing, scrolling (mouse or touchpad), videos and tutorials
-  (YouTube, Udemy, Coursera…), music, away, asleep. Counts *how fast* you type, never *what*.
-- **18 animations** with the 3D **Saarthi** character by default, the cartoon robot **Bit**, your own
-  skins, and a **3D avatar maker** for a full-body character of yourself
+- **Knows what you're doing**: fast/slow typing, scrolling (mouse or touchpad), away, asleep, and what's
+  playing, told apart as **music**, a **tutorial** or **any other video** from its title and channel
+  (YouTube, YouTube Music, Udemy, Coursera…). Counts *how fast* you type, never *what*.
+- **18 states, 30+ animations** with the 3D **Saarthi** character by default, the cartoon robot **Bit**,
+  your own skins, and a **3D avatar maker** for a full-body character of yourself
+- **Acts the part**: notes, hand on chin or trying the code during a tutorial; popcorn, a laugh or a cold
+  drink for other videos; headphones and a head bob for music; sits down worn out on a low battery;
+  fans itself when the laptop is hot
 - **Alive when you touch it**: poke its head, tickle its belly, step on its shoes, tug its jeans, click
   too much and it gets dizzy; only the character itself is clickable (clicks around it reach the window
   behind); drag it anywhere; **walking mode** strolls along your screen
@@ -41,7 +45,11 @@ reminders and notes, takes breaks and lunch with you, breathes with you, and tel
   ✓ Done / ✗ Skipped tracking and a weekly score; **notes** that work as a to-do list
 - **Calendar** with your events plus read-only Google / Outlook / Apple sync (iCal links)
 - **Quote lists** (ships with a no-smoking list: lungs, heart, hair, skin and brain facts)
-- **Morning brief**, **weather** (outfits, rain warnings) and **traffic home before logout**
+- **Lines that don't repeat**: every list takes turns; useful tips while you scroll for a long time
+  (Ctrl+F, 20-20-20, posture…) or watch a tutorial (code along, J to rewind, captions…)
+- **Morning brief** at the time you choose, **weather** (outfits, rain warnings) and **traffic home before logout**
+- **State schema** (`schema.py`): everything that drives the character, in one Pydantic model, optionally
+  sent to another app (e.g. your Glitch) with `glitch_url`
 - Double-click **panel** (dark/light), a full window, **What I see…** live diagnostics and a
   **🧪 Try features** menu to trigger anything on demand
 - Hinglish or English, one-command installers, start with your computer, one instance only
@@ -211,7 +219,7 @@ python tools/docs/build_pdfs.py       # rebuild the PDFs (needs: pip install rep
 |---|---|
 | **Double-click** | Panel: status, quiet mode, quick actions, reminders, notes, today |
 | **Right-click** | Menu: status, quiet mode, 🧪 Try features, What I see…, settings |
-| **Click** | Poke (head) or tickle (body) |
+| **Click** | Head: poke · belly: tickle · jeans: tug · shoes: stomp (4 quick clicks: dizzy) |
 | **Drag** | Move it anywhere |
 
 ![Quick panel](docs/panel.png)
@@ -229,6 +237,10 @@ When something is due, the buddy holds up a sign and a card pops up next to it:
 **Sync Google Calendar:** Google Calendar → Settings → your calendar → *Secret address in iCal
 format* → paste it in the Calendar tab. It refreshes every 15 minutes. Keep that link private:
 anyone who has it can read your calendar.
+
+**Morning brief:** once a day, the first time you're at the laptop after the time you set
+(Settings → Weather → *Morning brief at*, default 05:00): today's events and reminders plus the weather.
+A closed lid or a shut-down laptop just delays it until you're back.
 
 Everything is stored locally in `data.json` in your config folder.
 
@@ -262,7 +274,10 @@ Saarthi has a lot going on, so it follows a few simple rules:
    less important lines wait their turn, and idle chatter is simply skipped if something is showing.
 4. **It doesn't wander off** while typing, while a panel or card is open next to it, or during a session.
 5. **Nothing nags while you're away or deep in work**: quotes and breathing wait when you're typing fast,
-   watching a video, or away.
+   watching a video, or away. Scroll tips only come after 2 minutes of scrolling, then at most every 10.
+6. **What the character shows**, top wins: your click / a reminder / a session → a video (unless you're
+   typing) → asleep / away → typing → scrolling → standing. While standing: music (headphones) beats a
+   low battery (sitting, tired) beats a hot laptop (fanning), except below 5% battery.
 
 Right-click → **What I see…** shows the current session and what's coming next (break, breathing,
 next reminder).
@@ -277,6 +292,12 @@ next reminder).
 
 macOS: typing via pynput (needs Accessibility permission), idle via CoreGraphics, music via
 Spotify/Music, videos via the active Chrome/Safari tab title.
+
+**Music, tutorial or video?** From the title and channel of what's playing, in this order:
+a music label's channel ("Artist - Topic", VEVO, T-Series, Sony Music…) → music; study words
+(tutorial, course, lecture, for beginners, how to, explained, sikho, samjho, padhai…) → tutorial; music
+words in the title or channel (song, lyrics, official video, instrumental, music, sitar, remix, lofi…)
+→ music; anything else → video. YouTube Music, Spotify and other music players are always music.
 
 Right-click → **What I see…** shows which detectors are active and their live readings.
 
@@ -334,7 +355,8 @@ State names: `idle typing_fast typing_slow scrolling watching afk sleeping wakin
 
 Optional extra takes on a state use `state.take` keys. While you watch a study video Saarthi picks from
 `watching.notes`, `watching.chin` and `watching.try`; for anything else from `watching.popcorn`,
-`watching.laugh` and `watching.sip`. A skin without them just uses `watching`.
+`watching.laugh` and `watching.sip`. Standing has `idle.music`, `idle.tired` and `idle.hot`; clicks on
+the shoes and jeans play `poked.boots` and `poked.jeans`. A skin without a take just uses the plain state.
 
 Preview a skin without running the app:
 
@@ -342,13 +364,31 @@ Preview a skin without running the app:
 saarthi --snapshot out/ --skin "folder:/path/to/skin"
 ```
 
+## State schema (for other apps)
+
+`src/saarthi/schema.py` keeps what Saarthi works out about you, and what the character does about it, in one
+Pydantic model (`SaarthiState`, `schema_version` 1):
+
+| Field | Example |
+|---|---|
+| `typing`, `keys_per_sec` | `"slow"`, `1.4` |
+| `scrolling`, `scrolls_per_sec`, `idle_seconds` | `false`, `0.0`, `3` |
+| `media` | `{"kind": "tutorial", "site": "youtube", "title": "...", "channel": "..."}` or `null` |
+| `state`, `take` | `"watching"`, `"notes"` |
+| `source`, `device`, `at` | `"linux"`, hostname, UTC time |
+
+Set `"glitch_url": "http://127.0.0.1:8400"` in `config.json` and Saarthi POSTs it to
+`<glitch_url>/api/saarthi/state` whenever the moment changes (and every 30 s). Weather, battery, reminders,
+breaks and walking are never in it. Empty `glitch_url` (the default) sends nothing.
+
 ## Privacy
 
 Saarthi only records *that* a key was pressed (a timestamp, kept for 3 seconds to measure
 speed), never *which* key. Nothing is written to disk and nothing leaves your computer except
 the weather/traffic lookups described above (each can be turned off in Settings). To tell whether
 you're online it opens a connection to 1.1.1.1 / 8.8.8.8 every 15 s and sends nothing (turn off
-**Laptop alerts** in the menu to stop it). Check `src/saarthi/activity/inputs.py`.
+**Laptop alerts** in the menu to stop it). With `glitch_url` set, the state schema above goes to that
+address (titles of what's playing included); it's empty by default. Check `src/saarthi/activity/inputs.py`.
 
 ## Roadmap
 

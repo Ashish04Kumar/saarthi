@@ -19,6 +19,7 @@ MIN_CREDIT_WIDTH = 170
 MASK_EVERY = 0.12  # s between click-through mask refreshes
 MASK_GROW = 4  # px of slack around the drawn pixels so moving limbs aren't clipped
 HIT_SLACK = 3  # px: a click this close to the character still counts
+HEAD_MIN_W = 0.12  # a row this wide (× character height) is the top of the head, not steam / Zzz / notes
 
 
 class BuddyWindow(QWidget):
@@ -47,7 +48,7 @@ class BuddyWindow(QWidget):
         self.takes: dict[State, tuple[str, float]] = {}
         self.badge: str | None = None  # small battery icon: "low" / "critical" / "charging" / "full"
         self.battery = 0.0  # % shown in the badge
-        self._badge_rect = QRect()
+        self._head = QRect()  # where the head is (widget coords): the battery badge and the bubble sit around it
         self._frame: QImage | None = None  # last drawn frame, for pixel-exact clicks
         self._mask_at = 0.0
         self._body = QRect()  # where the character's pixels are (widget coords)
@@ -154,6 +155,9 @@ class BuddyWindow(QWidget):
                 variant, t_state = take[0], now - take[1]
         self.skin.paint(p, QRectF(0, 0, w, h), shown, now - self.t0, t_state, variant)
         p.resetTransform()
+        refresh = now - self._mask_at > MASK_EVERY and self._press is None
+        if refresh:  # measure the character itself, before the badge goes on top
+            self._measure_body(img)
         if self.badge:
             self._paint_badge(p, now)
         p.end()
@@ -162,25 +166,43 @@ class BuddyWindow(QWidget):
         out.setCompositionMode(QPainter.CompositionMode.CompositionMode_Source)
         out.drawImage(0, 0, img)
         out.end()
-        if now - self._mask_at > MASK_EVERY and self._press is None:
+        if refresh:
             self._mask_at = now
             self._update_mask(img)
 
-    def _update_mask(self, img: QImage) -> None:
-        """Let clicks on the empty space around the character fall through to the window behind."""
+    def _drawn_region(self, img: QImage) -> QRegion:
+        """Every pixel with any alpha at all, as a region in widget coordinates."""
         if img.devicePixelRatio() != 1:
             img = img.scaled(self.width(), self.height())
-        # every pixel with any alpha at all is "inside"
         alpha = img.convertToFormat(QImage.Format.Format_Alpha8)
         gray = QImage(
             alpha.constBits(), alpha.width(), alpha.height(), alpha.bytesPerLine(), QImage.Format.Format_Grayscale8
         ).copy()
-        bits = QBitmap.fromImage(gray.createMaskFromColor(0xFF000000, Qt.MaskMode.MaskInColor))
-        drawn = QRegion(bits)
-        body = drawn.intersected(QRegion(0, 0, self.width(), self.height() - self.credit_height()))
-        if self.badge:
-            body = body.subtracted(QRegion(self._badge_rect))  # the badge sits on the body, isn't part of it
-        self._body = body.boundingRect()
+        return QRegion(QBitmap.fromImage(gray.createMaskFromColor(0xFF000000, Qt.MaskMode.MaskInColor)))
+
+    def _measure_body(self, img: QImage) -> None:
+        """Where the character and its head are. Thin things above the head (chai steam, Zzz, music notes)
+        don't count: the head starts at the first row that is at least HEAD_MIN_W wide."""
+        region = self._drawn_region(img).intersected(QRegion(0, 0, self.width(), self.height() - self.credit_height()))
+        box = region.boundingRect()
+        if box.isEmpty():
+            self._body = self._head = QRect()
+            return
+        rows: dict[int, list[int]] = {}
+        for r in region:  # banded rects: sum widths per row band
+            for y in range(r.top(), r.bottom() + 1):
+                span = rows.setdefault(y, [r.left(), r.right(), 0])
+                span[0], span[1], span[2] = min(span[0], r.left()), max(span[1], r.right()), span[2] + r.width()
+        min_w = max(8, int(box.height() * HEAD_MIN_W))
+        top = next((y for y in sorted(rows) if rows[y][2] >= min_w), box.top())
+        probe = rows.get(min(top + int(box.height() * 0.08), box.bottom()), rows.get(top))
+        left, right = (probe[0], probe[1]) if probe else (box.left(), box.right())
+        self._body = QRect(box.left(), top, box.width(), box.bottom() - top + 1)
+        self._head = QRect(left, top, right - left + 1, max(1, int(box.height() * 0.25)))
+
+    def _update_mask(self, img: QImage) -> None:
+        """Let clicks on the empty space around the character fall through to the window behind."""
+        drawn = self._drawn_region(img)
         grown = drawn
         for dx, dy in ((MASK_GROW, 0), (-MASK_GROW, 0)):
             grown = grown.united(drawn.translated(dx, dy))
@@ -209,11 +231,10 @@ class BuddyWindow(QWidget):
 
         if self.badge == "critical" and int(now * 2) % 2:
             return  # blink
-        body = self._body if not self._body.isEmpty() else self.rect()
+        head = self._head if not self._head.isEmpty() else self.rect()
         bw, bh = 24, 12
-        x = min(self.width() - bw - 6, body.center().x() + body.width() // 6)  # just right of the head
-        y = max(2, body.top() + 2)
-        self._badge_rect = QRect(int(x) - 2, int(y) - 2, bw + 8, bh + 4)
+        x = min(self.width() - bw - 4, head.right() + 4)  # just right of the head
+        y = max(2, head.top() + 2)
         color = {"low": "#FF4D4F", "critical": "#FF1F1F", "charging": "#38D172", "full": "#38D172"}[self.badge]
         p.save()
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
