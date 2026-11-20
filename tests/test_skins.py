@@ -113,7 +113,7 @@ def test_clicking_shoes_and_jeans_is_told_apart():
     from saarthi.window import BuddyWindow
 
     sk = skin.load("bundled:saarthi")
-    assert {"boots", "jeans"} <= sk.variants(State.POKED)
+    assert {"boots", "jeans", "slap", "ball", "pillow", "love", "kiss", "hug", "angry"} <= sk.variants(State.POKED)
     assert {"tired", "hot", "music"} <= sk.variants(State.IDLE)
     w = BuddyWindow(sk, 256, credit=None)
     w.grab()

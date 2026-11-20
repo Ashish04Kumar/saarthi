@@ -48,6 +48,7 @@ class BuddyWindow(QWidget):
         self.badge: str | None = None  # small battery icon: "low" / "critical" / "charging" / "full"
         self.battery = 0.0  # % shown in the badge
         self._badge_rect = QRect()
+        self.presence = False  # green dot: someone has your Couple mode link open right now
         self._frame: QImage | None = None  # last drawn frame, for pixel-exact clicks
         self._mask_at = 0.0
         self._body = QRect()  # where the character's pixels are (widget coords)
@@ -156,6 +157,8 @@ class BuddyWindow(QWidget):
         p.resetTransform()
         if self.badge:
             self._paint_badge(p, now)
+        if self.presence:
+            self._paint_presence(p, now)
         p.end()
         self._frame = img
         out = QPainter(self)
@@ -178,7 +181,7 @@ class BuddyWindow(QWidget):
         bits = QBitmap.fromImage(gray.createMaskFromColor(0xFF000000, Qt.MaskMode.MaskInColor))
         drawn = QRegion(bits)
         body = drawn.intersected(QRegion(0, 0, self.width(), self.height() - self.credit_height()))
-        if self.badge:
+        if self.badge or self.presence:
             body = body.subtracted(QRegion(self._badge_rect))  # the badge sits on the body, isn't part of it
         self._body = body.boundingRect()
         grown = drawn
@@ -202,6 +205,32 @@ class BuddyWindow(QWidget):
                 if img.pixelColor(x, y).alpha() > 24:
                     return True
         return False
+
+    def set_presence(self, on: bool) -> None:
+        self.presence = on
+        self.update()
+
+    def _paint_presence(self, p: QPainter, now: float) -> None:
+        """A small green 'online' dot left of the head, gently pulsing."""
+        from PySide6.QtGui import QColor, QPen
+
+        body = self._body if not self._body.isEmpty() else self.rect()
+        r = 5.0
+        x = max(r + 3, body.center().x() - body.width() // 5)
+        y = max(r + 3, body.top() + 8)
+        glow = 0.5 + 0.5 * math.sin(now * 3)
+        p.save()
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        p.setPen(Qt.PenStyle.NoPen)
+        p.setBrush(QColor(58, 210, 122, int(60 + 60 * glow)))
+        p.drawEllipse(QRectF(x - r - 3, y - r - 3, 2 * r + 6, 2 * r + 6))
+        p.setPen(QPen(QColor(255, 255, 255, 230), 1.4))
+        p.setBrush(QColor(58, 210, 122))
+        p.drawEllipse(QRectF(x - r, y - r, 2 * r, 2 * r))
+        p.restore()
+        self._badge_rect = self._badge_rect.united(
+            QRect(int(x - r - 4), int(y - r - 4), int(2 * r + 8), int(2 * r + 8))
+        )
 
     def _paint_badge(self, p: QPainter, now: float) -> None:
         """A phone-style battery icon next to the head."""
