@@ -71,6 +71,7 @@ class Saarthi:
         self.bubble = Bubble()
         self._bubble_prio = LOW
         self._speech: list[tuple[str, int | None, int]] = []
+        self._shareable: set[str] = set()  # lines allowed on the live link
         self.bubble.closed.connect(self._next_line)
         self.win.clicked.connect(self.on_click)
         self.win.double_clicked.connect(lambda: self.org.open_panel())
@@ -88,6 +89,9 @@ class Saarthi:
         from .laptop_react import LaptopReactions
 
         self.laptop = LaptopReactions(self)
+        from .share import ShareLink
+
+        self.share = ShareLink(self)
         from .glitch import GlitchLink
 
         self.state_now = None  # schema.SaarthiState: everything that drives the character right now
@@ -135,7 +139,7 @@ class Saarthi:
         state = self.sm.update(activity, now)
         music_started = activity.music_playing and not self.music_was_playing
         if music_started and now - self.last_line_at > AUTO_LINE_GAP and random.random() < 0.5:
-            self.say(line_for("music", self.cfg["language"]), priority=LOW)
+            self.say(line_for("music", self.cfg["language"]), priority=LOW, share=True)
         if activity.music_playing != self.music_was_playing:
             self.laptop.refresh_looks(now)  # put the headphones on / take them off right away
         self.music_was_playing = activity.music_playing
@@ -166,7 +170,7 @@ class Saarthi:
             due = SCROLL_TALK_AFTER if not tipped else SCROLL_TALK_AGAIN
             if now - (tipped or started) >= due:
                 self._scroll[2] = now
-                self.say(line_for(State.SCROLLING, self.cfg["language"]), 6000, priority=LOW)
+                self.say(line_for(State.SCROLLING, self.cfg["language"]), 6000, priority=LOW, share=True)
         elif self._scroll is not None and now - self._scroll[1] > SCROLL_PAUSE_OK:
             self._scroll = None
 
@@ -183,7 +187,7 @@ class Saarthi:
     def on_state_change(self, state: State, now: float):
         chatty = state in CHATTY and now - self.last_line_at > AUTO_LINE_GAP
         if state in TRANSIENT or (chatty and random.random() < 0.6):
-            self.say(line_for(self.line_key(state), self.cfg["language"]), priority=LOW)
+            self.say(line_for(self.line_key(state), self.cfg["language"]), priority=LOW, share=True)
 
     def line_key(self, state: State):
         a = getattr(self, "activity", None)
@@ -196,7 +200,7 @@ class Saarthi:
 
     def chatter(self):
         if self.sm.state not in (State.SLEEPING, State.TYPING_FAST) and not self.wellness.active:
-            self.say(line_for("random", self.cfg["language"]), priority=LOW)
+            self.say(line_for("random", self.cfg["language"]), priority=LOW, share=True)
         self.schedule_chatter()
 
     def schedule_chatter(self):
@@ -204,10 +208,20 @@ class Saarthi:
         self.chatter_timer.start(int(random.uniform(lo, hi) * 60_000))
 
     # ---------- speech ----------
-    def say(self, text: str | None, ms: int | None = None, force: bool = False, priority: int | None = None):
-        """Show a line. force = part of a session / direct reply to the user (HIGH priority)."""
+    def say(
+        self,
+        text: str | None,
+        ms: int | None = None,
+        force: bool = False,
+        priority: int | None = None,
+        share: bool = False,
+    ):
+        """Show a line. force = part of a session / direct reply to the user (HIGH priority).
+        share = this line may also appear on the live link (never reminders, notes, calendar, places)."""
         if not text or not (self.cfg["bubbles"] or force) or self.quiet:
             return
+        if share:
+            self._shareable.add(text)
         prio = priority if priority is not None else (HIGH if force else NORMAL)
         if not force and getattr(self, "wellness", None) is not None and self.wellness.active:
             return  # don't cover the break / breathing countdown
@@ -218,7 +232,14 @@ class Saarthi:
             return
         self._show_line(text, ms, prio)
 
+    def say_shared(self, text: str | None, ms: int | None = None, force: bool = False, priority: int | None = None):
+        self.say(text, ms, force, priority, share=True)
+
     def _show_line(self, text: str, ms: int | None, prio: int):
+        if text in self._shareable:
+            self._shareable.discard(text)
+            if getattr(self, "share", None) is not None:
+                self.share.say(text)
         self.last_line_at = time.monotonic()
         self._bubble_prio = prio
         self.bubble.say(text, self.win.body_rect(), self.screen_rect(), ms)
@@ -271,7 +292,7 @@ class Saarthi:
             self.sm.trigger(state, now)
             self.win.set_state(state, now)
             self.win.set_variant(State.POKED, take)
-        self.say(line_for(key, lang), 2500, priority=HIGH)
+        self.say(line_for(key, lang), 2500, priority=HIGH, share=True)
 
     def toggle_status(self, key: str) -> bool:
         """Pick a status; picking the current one again goes back to Working.
@@ -372,6 +393,7 @@ class Saarthi:
     def shutdown(self):
         self.source.stop()
         self.laptop.stop()
+        self.share.stop()
         self.glitch.stop()
         self.org.stop()
 
@@ -459,6 +481,7 @@ class Saarthi:
         walk = QAction("Walking mode (strolls around)", m, checkable=True, checked=bool(self.cfg["walk_enabled"]))
         walk.toggled.connect(lambda v: self.cfg.__setitem__("walk_enabled", v))
         m.addAction(walk)
+        self.build_share_menu(m.addMenu("💑 Couple mode"))
         lap = QAction(
             "Laptop alerts (battery, heat, internet…)", m, checkable=True, checked=bool(self.cfg["laptop_alerts"])
         )
@@ -505,6 +528,28 @@ class Saarthi:
         m.addAction("Quit", self.app.quit)
 
     # ---------- Try features ----------
+    def build_share_menu(self, menu: QMenu):
+        """One switch: laptop only, or Couple mode (link + their actions here + chat)."""
+        from . import share as sh
+
+        ready = bool(self.cfg["share_url"])
+        couple = QAction("💑 Couple mode", menu, checkable=True, checked=self.share.enabled)
+        couple.setEnabled(ready)
+        couple.toggled.connect(self.share.set_enabled)
+        menu.addAction(couple)
+        menu.addSeparator()
+        menu.addAction("💬 Open chat…", self.share.open_chat).setEnabled(ready)
+
+        def copy():
+            sh.ensure_ids(self.cfg)
+            QApplication.clipboard().setText(sh.link(self.cfg))
+            self.say("Link copy ho gaya 🔗" if self.cfg["language"] == "hinglish" else "Link copied 🔗", force=True)
+
+        menu.addAction("🔗 Copy link", copy).setEnabled(ready)
+        if not ready:
+            menu.addSeparator()
+            menu.addAction("Not set up yet: deploy relay/ and set share_url").setEnabled(False)
+
     def simulate(self, activity, seconds: float = 10):
         """Pretend you're doing something for a few seconds."""
         self.sm.preview = None

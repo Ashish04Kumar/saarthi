@@ -67,6 +67,8 @@ def technical() -> list:
                  ["wellness.py, wellness_logic.py", "Break / lunch / breathing sessions, typing streaks"],
                  ["walker.py", "Random strolls, break and lunch pacing, return home"],
                  ["schema.py, glitch.py", "SaarthiState (what drives the character); optional sender to glitch_url"],
+                 ["share.py, chat_window.py", "Couple mode: relay connection, their actions, chat, online dot"],
+                 ["relay/ (JavaScript)", "Cloudflare Worker + Durable Object room; the live web page"],
                  ["laptop.py", "LaptopProbe thread (sensors) and LaptopWatch (thresholds, cool-downs → events)"],
                  ["laptop_react.py", "Lines, battery badge, tired / hot looks, moving to the bigger monitor"],
                  ["outdoor.py, weather.py, commute.py, net.py", "Weather, outfits, rain warning, routing"],
@@ -89,6 +91,7 @@ def technical() -> list:
                  ["Laptop reactions", "on change", "Probe → Qt signal → lines, badge, tired / hot look "
                   "(a 1 s timer only ends badges and Try-menu previews)"],
                  ["Click-through mask", "120 ms", "Window input shape follows the drawn character"],
+                 ["Couple mode", "on change; 30 s", "State to the relay when it changes, heartbeat every 30 s"],
                  ["Calendar sync", "15 min", "Re-download iCal feeds on a worker thread"],
                  ["Weather", "30 min", "Open-Meteo forecast, outfit, rain warning"],
                  ["Chit-chat", "20–40 min", "A random line (low priority)"]], [40, 30, 104])]
@@ -221,7 +224,40 @@ def technical() -> list:
             "moment changes (rates and idle seconds alone don't count) and every 30 s, on its own thread; failures are "
             "silent. Weather, battery, reminders, breaks and walking stay out of the schema.")]
 
-    s += [P("12. Network services", "h1"),
+    s += [P("12. Couple mode (live link)", "h1"),
+          P("One switch (<i>share_enabled</i>, menu and Settings), off by default. The person you send the link "
+            "to watches your character live, plays with it and chats with you; their actions also play on your "
+            "desktop."),
+          code("Saarthi (share.py) --WebSocket--> Cloudflare Worker: Room (Durable Object) <--WebSocket-- browser"),
+          table([["Part", "How it works"],
+                 ["Relay (relay/src/worker.js)", "One Durable Object room per link (free plan). Keeps the latest state and "
+                  "the last 50 chat messages, fans them out to every open page, tells the owner how many pages are open."],
+                 ["Ownership", "Random room id in the link; the laptop's secret token (config.json) claims the room on "
+                  "first connect (stored as SHA-256). Any other token is refused."],
+                 ["Limits", "9 whitelisted actions; 0.8 s per action and 0.7 s per message per page; messages ≤ 500 "
+                  "characters; frames ≤ 4 KB"],
+                 ["Page (relay/public)", "The same skin frames (copied at deploy with a frame manifest); plays the state "
+                  "and take it receives; finds the tapped part (head / belly / jeans / shoes) by position and colour"],
+                 ["Saarthi side (share.py)", "Qt WebSocket with back-off reconnect. Sends {state, take, mirror, walking, "
+                  "kind, name} on change and every 30 s; turns their actions into animations + bubbles, chat into cards, "
+                  "viewer counts into the green dot."],
+                 ["What leaves", "Only say(…, share=True) lines (chit-chat, state lines, tips, music, sessions, battery, "
+                  "net) plus the chat. Never reminders, notes, calendar, brief, weather, traffic or titles."]], [44, 130]),
+          P("Their actions", "h2"),
+          table([["Action", "Animation (poked.&lt;take&gt;)"],
+                 ["poke / tickle / jeans / shoes", "Same as clicking those parts on the desktop"],
+                 ["slap", "Head snaps aside, hand on a blushing cheek"],
+                 ["ball", "A football bonks his head and bounces away; he rubs the spot"],
+                 ["pillow", "A pillow hits his face and drops; he wobbles, then laughs"],
+                 ["love", "Hearts float up, blush, shy smile"],
+                 ["kiss", "Red lips fly to his cheek and leave a mark; hands on heart, hearts"],
+                 ["hug", "Arms wide, then hugs himself tight, rocking and blushing"],
+                 ["angry", "Red anger mark, he shrinks, hands together sorry, a sweat drop"]], [44, 130]),
+          P("During a break, lunch or breathing only the bubble shows (the session isn't broken); in Quiet mode "
+            "nothing plays. Deploy: <i>cd relay; npm install; npx wrangler login; npm run deploy</i>, then set "
+            "share_url.")]
+
+    s += [P("13. Network services", "h1"),
           table([["Service", "Used for", "Key"],
                  ["Open-Meteo", "Weather forecast and city search", "none"],
                  ["ipapi.co / ipinfo.io", "Approximate city from IP (only in automatic mode)", "none"],
@@ -232,30 +268,33 @@ def technical() -> list:
                  ["Google Routes API", "Live traffic", "billing key"],
                  ["iCal links", "Google / Outlook / Apple calendar (read-only)", "secret link"],
                  ["1.1.1.1 / 8.8.8.8", "Online check: opens a TCP connection every 15 s, sends nothing", "none"],
-                 ["glitch_url (optional)", "The state schema, only if you set it (default: off)", "none"]],
+                 ["glitch_url (optional)", "The state schema, only if you set it (default: off)", "none"],
+                 ["Your relay (Couple mode)", "Live state, shareable lines and chat; only while Couple mode is on",
+                  "your token"]],
                 [40, 104, 30])]
 
-    s += [P("13. Data and configuration", "h1"),
+    s += [P("14. Data and configuration", "h1"),
           table([["OS", "Config + data folder", "Installed app"],
                  ["Linux", "~/.config/saarthi/", "~/.local/share/saarthi/venv"],
                  ["Windows", "%APPDATA%\\Saarthi\\", "%LOCALAPPDATA%\\Saarthi\\venv"],
                  ["macOS", "~/Library/Application Support/Saarthi/", "…/Saarthi/app/venv"]], [24, 80, 70]),
           P("config.json holds settings (skin, size, language, theme, weather, commute, wellness, walking, "
-            "laptop alerts, morning brief time, glitch_url). "
+            "laptop alerts, morning brief time, glitch_url, Couple mode: share_enabled, share_url, share_room, "
+            "share_token, share_name, share_friend). "
             "data.json holds reminders, notes, events, feeds, quote lists, reminder history and cached feed events. "
             "Both are written atomically (temp file + rename). Custom skins live in the <i>skins/</i> sub-folder.")]
 
-    s += [P("14. Skins and the 3D avatar", "h1"),
+    s += [P("15. Skins and the 3D avatar", "h1"),
           P("A skin is a folder with <i>skin.json</i> and frames per state (PNG sequence, GIF or sprite sheet). "
             "The avatar tool renders a full-body character with a numpy signed-distance-field raymarcher: "
             "spheres, capsules, ellipsoids and boxes combined with smooth unions, toon shading, ambient occlusion, "
             "rim light and outlines, at 2× supersampling. Appearance is a <i>Look</i> (skin, hair, beard, shirt, "
             "slim, sleeves, watch …) and each state is a <i>Pose</i> function of time. Extra takes use "
             "<i>state.take</i> keys (e.g. <i>watching.notes</i>, frames in <i>watching_notes/</i>); props include "
-            "laptop, popcorn, notebook and pen, soda cup, headphones and music notes, tiffin, chai and thought "
-            "bubbles."),
+            "laptop, popcorn, notebook and pen, soda cup, headphones and music notes, tiffin, chai, thought "
+            "bubbles, football, pillow, hearts, lips and kiss mark, blush and the anger mark."),
           code("python tools/avatar/build_skin.py ~/.config/saarthi/skins/me --name \"Me\""),
-          P("15. Packaging, startup and control", "h1"),
+          P("16. Packaging, startup and control", "h1"),
           bullets([
               "install.sh (Linux/macOS) and install.ps1 / install.bat (Windows) create a private virtualenv, "
               "add an app-menu entry / ~/Applications app / Start-menu shortcut, and start the app. "
@@ -263,16 +302,21 @@ def technical() -> list:
               "Start with the computer: ~/.config/autostart (Linux), HKCU Run key (Windows), LaunchAgent (macOS).",
               "Single instance through a QLocalServer: launching again shows the running buddy; "
               "<i>saarthi --quit</i> asks it to close."]),
-          P("16. Tests", "h1"),
-          P("84 automated tests (pytest): state machine, rate counters, media classification, evdev event "
+          P("17. Tests", "h1"),
+          P("87 automated tests (pytest): state machine, rate counters, media classification, evdev event "
             "handling, scheduler maths, iCal parsing, weather/route parsing, Maps links, autostart, typing streaks, "
             "laptop thresholds (battery levels, quick charger toggles, heat, Wi-Fi drop and reconnect retries, uptime, audio, late night), click zones "
             "and pixel hit-testing, watching takes, music / video / tutorial titles, lines taking turns, long-scroll "
-            "tips, the brief time, music vs tired looks, the state schema and its sender (fake server), "
+            "tips, the brief time, music vs tired looks, the state schema and its sender (fake server), Couple mode "
+            "(only safe lines shared, kinds without titles, their actions with their name, room id and token, the "
+            "green dot), "
             "and 13 end-to-end scenarios on a real offscreen buddy (speech priorities, sessions vs reminders, typing "
             "cancels a break, lunch flow, minutes picker, quiet mode, panel ↔ full-window sync, delete, walking guards)."),
           code("pip install -e \".[dev]\"\npytest\nruff check src tests"),
-          P("17. Known limitations", "h1"),
+          P("The relay has its own end-to-end test (<i>cd relay; npm test</i>, against <i>npm run dev</i> or the "
+            "deployed Worker): state to the page, actions to the owner, rate limits and the whitelist, chat both ways, "
+            "history for a page opened later, viewer counts and a foreign token being refused."),
+          P("18. Known limitations", "h1"),
           bullets([
               "Windows and macOS code paths are written but not yet tested on real machines.",
               "Linux Wayland needs the input group for typing detection; the window runs via XWayland.",
@@ -410,7 +454,30 @@ def features() -> list:
                  ["Second monitor plugged in", "Moves to the bigger screen; comes back if it's unplugged"]],
                 [56, 118])]
 
-    s += [P("10. Checking that everything works", "h1"),
+    s += [P("10. Couple mode", "h1"),
+          P("One switch: right-click → <b>Couple mode</b> (or Settings → Couple mode). Off by default. When on, "
+            "send the link (right-click → Couple mode → <b>Copy link</b>) to the person you want; they open it "
+            "on a phone or laptop."),
+          table([["They see / do", "What happens"],
+                 ["Your character, live", "The same animation as your desktop, and “Ashish is typing / watching a "
+                  "video / learning / listening to music / on a break …” (never titles)"],
+                 ["Tap him", "Head → poke, belly → tickle, jeans → tug, shoes → stomp"],
+                 ["Slap, Football, Pillow, Hug, Love, Kiss, Angry", "Each has its own animation, on their page and on "
+                  "your desktop"],
+                 ["Chat (with emoji)", "Their message reaches you as a card with Reply; your reply shows on their "
+                  "page and as his bubble"],
+                 ["Laptop off", "Their page says offline and when you were last seen"]], [62, 112]),
+          table([["On your desktop", "What happens"],
+                 ["They do something", "The same animation + “Riya kicked a football at you” (only the bubble "
+                  "during a break, lunch or breathing; nothing in Quiet mode)"],
+                 ["They write", "Card “Riya: …” → Reply opens the chat window (emoji button inside)"],
+                 ["They open the link", "Green dot next to his head + “Riya is online” once"]], [62, 112]),
+          P("Set the relay address, your name and their name in Settings → Couple mode. Only the character, a "
+            "general word for what you're doing, the shareable lines and the chat leave your laptop; never "
+            "reminders, notes, calendar, the brief, weather, traffic or titles. Anyone with the link can watch, "
+            "so send it only to them.", "note")]
+
+    s += [P("11. Checking that everything works", "h1"),
           P("<b>Right-click → What I see…</b> shows live:"),
           table([["Field", "Meaning"],
                  ["Typing & scroll / Idle time / Video", "Which detector is active on your system"],
@@ -425,7 +492,7 @@ def features() -> list:
             "<b>Laptop</b>: battery low / critical, charger in / out, full, hot, internet gone / back, restart, "
             "headphones, mute, loud volume, after midnight, second monitor.")]
 
-    s += [P("11. Troubleshooting", "h1"),
+    s += [P("12. Troubleshooting", "h1"),
           table([["Problem", "Fix"],
                  ["Typing has no effect (Linux Wayland)", "Join the input group and log out/in (see section 1). "
                                                           "Menu → Fix typing detection… explains it."],
@@ -434,12 +501,15 @@ def features() -> list:
                                           "Monitoring → allow Saarthi / Python, then restart it"],
                  ["Two buddies?", "Not possible: launching again just shows the running one"],
                  ["Want silence", "Quiet mode, or turn off Speech bubbles in the menu"],
-                 ["Too many laptop lines", "Right-click → untick Laptop alerts"]], [56, 118]),
-          P("12. Privacy", "h1"),
+                 ["Too many laptop lines", "Right-click → untick Laptop alerts"],
+                 ["Couple mode page says offline", "Is Couple mode ticked and the relay address set? Is the laptop "
+                  "online?"]], [56, 118]),
+          P("13. Privacy", "h1"),
           P("Saarthi counts how fast you type, never what you type. Your notes, reminders and settings stay in "
             "your config folder. Network use: weather, approximate location (automatic mode only), routes, address "
             "search when you press Search, calendar links you add, and an online check (a connection to 1.1.1.1, "
-            "nothing sent) for the internet line.")]
+            "nothing sent) for the internet line. With Couple mode on, the character, a general activity word, "
+            "shareable lines and the chat go to your own relay.")]
     return s
 
 

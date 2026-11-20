@@ -50,6 +50,9 @@ reminders and notes, takes breaks and lunch with you, breathes with you, and tel
 - **Morning brief** at the time you choose, **weather** (outfits, rain warnings) and **traffic home before logout**
 - **State schema** (`schema.py`): everything that drives the character, in one Pydantic model, optionally
   sent to another app (e.g. your Glitch) with `glitch_url`
+- **💑 Couple mode** (one switch): a live link where someone can watch your Saarthi from their phone, tap
+  it, kick a football at it, hug, kiss or be angry with it, and **chat** with you; it all plays on your
+  desktop too, and a green dot shows when they're watching
 - Double-click **panel** (dark/light), a full window, **What I see…** live diagnostics and a
   **🧪 Try features** menu to trigger anything on demand
 - Hinglish or English, one-command installers, start with your computer, one instance only
@@ -364,6 +367,50 @@ Preview a skin without running the app:
 saarthi --snapshot out/ --skin "folder:/path/to/skin"
 ```
 
+## 💑 Couple mode (live link)
+
+One switch, off by default (right-click → **💑 Couple mode**, or Settings → Couple mode). When it's on,
+someone you send the link to can open it on their phone or laptop and:
+
+| They see / do | What happens |
+|---|---|
+| **Your character, live** | The same animation as your desktop: typing, a video (popcorn / notes…), music, a chai break, lunch, breathing, walking, asleep |
+| **What you're doing** | "Ashish is typing away ⌨️ / watching a video 🎬 / learning from a tutorial 📚 / listening to music 🎧 / on a chai break ☕ …", never titles; "offline · last seen 5 min ago" when your laptop is off |
+| **Tap him** | Head → poke, belly → tickle, jeans → tug, shoes → stomp |
+| **7 actions** | ✋ Slap · ⚽ Football · 🛏️ Pillow · 🤗 Hug · ❤️ Love · 💋 Kiss · 😤 Angry, each with its own 3D animation |
+| **Chat** | A chat box with emoji; your replies also appear as his speech bubble; the last 50 messages are kept |
+
+On **your** desktop:
+- Their action plays on your Saarthi too, with their name: *"Riya kicked a football at you ⚽"*,
+  *"Riya ne kiss bheja 💋"*, *"Riya gusse me hai 😤 Sorry bolo!"*. During a break, lunch or breathing only
+  the bubble shows. Nothing plays in Quiet mode.
+- Their message arrives as a card **💬 Riya: …** with **Reply**; the chat window has an emoji picker
+  (also: right-click → 💑 Couple mode → 💬 Open chat…).
+- A **🟢 green dot** next to Saarthi's head while the link is open, and *"Riya is online 💚"* once.
+
+### Set it up (once, free)
+
+The link goes through a tiny relay on Cloudflare's free plan (`relay/`):
+
+```bash
+cd relay
+npm install
+npx wrangler login          # sign in to your Cloudflare account in the browser
+npm run deploy              # prints https://saarthi-live.<your-subdomain>.workers.dev
+```
+
+Then in Settings → Couple mode set the **relay address**, **your name** and **their name**, tick
+**💑 Couple mode**, and use right-click → 💑 Couple mode → **🔗 Copy link** to send it. Redeploy
+(`npm run deploy`) after the character's animations change. More in [relay/README.md](relay/README.md).
+
+### What leaves your laptop
+
+Only the character's state (animation, take, a general word like "video"), your name, the lines marked
+shareable (chit-chat, tips, break / breathing countdowns, battery…) and the chat. **Never** your reminders,
+notes, calendar, morning brief, weather, traffic or what's playing. The room id in the link is random, and
+only your laptop's secret token (kept in `config.json`) can drive it; anyone with the link can watch, so
+send it only to them.
+
 ## State schema (for other apps)
 
 `src/saarthi/schema.py` keeps what Saarthi works out about you, and what the character does about it, in one
@@ -388,7 +435,8 @@ speed), never *which* key. Nothing is written to disk and nothing leaves your co
 the weather/traffic lookups described above (each can be turned off in Settings). To tell whether
 you're online it opens a connection to 1.1.1.1 / 8.8.8.8 every 15 s and sends nothing (turn off
 **Laptop alerts** in the menu to stop it). With `glitch_url` set, the state schema above goes to that
-address (titles of what's playing included); it's empty by default. Check `src/saarthi/activity/inputs.py`.
+address (titles of what's playing included); it's empty by default. Couple mode (off by default) shares
+only what's listed in its section above. Check `src/saarthi/activity/inputs.py`.
 
 ## Roadmap
 

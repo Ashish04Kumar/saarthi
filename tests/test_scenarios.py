@@ -358,3 +358,65 @@ def test_scroll_tip_only_after_a_long_stretch(buddy, monkeypatch):
     buddy._long_scroll(State.IDLE, t0 + 400 + app_mod.SCROLL_PAUSE_OK + 1)  # a real stop
     buddy._long_scroll(State.SCROLLING, t0 + 500)
     assert buddy._scroll[0] == t0 + 500 and len(said) == 1  # a new stretch starts from zero
+
+
+def test_live_link_shares_only_safe_lines(buddy, monkeypatch):
+    from saarthi import share as sh
+    from saarthi.app import HIGH
+    from saarthi.states import Activity, State
+
+    sent = []
+    monkeypatch.setattr(buddy.share, "say", sent.append)
+    buddy.bubble.hide()
+    buddy._speech.clear()
+    buddy.say("Yaad hai na? Doctor ko call", priority=HIGH)  # a reminder: private
+    buddy.bubble.hide()
+    buddy.say("Long page? Ctrl+F gets you there faster 🔍", priority=HIGH, share=True)
+    assert sent == ["Long page? Ctrl+F gets you there faster 🔍"]
+
+    # what the page is told: a general kind, never titles
+    buddy.activity = Activity(video_playing=True, media_tutorial=True, media_title="Secret project demo")
+    buddy.sm.state = State.WATCHING
+    buddy.win.set_state(State.WATCHING, 0)
+    view = sh.view_of(buddy)
+    assert view["kind"] == "tutorial" and "Secret" not in json.dumps(view)
+
+    # her football: plays here (with her name) only while the switch is on
+    buddy.cfg["share_friend"] = "Riya"
+    buddy.cfg["language"] = "en"
+    buddy.sm.end_transient(0)
+    buddy.bubble.hide()
+    buddy.share.on_action("ball")
+    assert buddy.sm.state == State.POKED and buddy.win.variant(State.POKED) == "ball"
+    assert sent[-1] == "Riya kicked a football at you ⚽"
+    buddy.sm.end_transient(0)
+    buddy.quiet = True  # screen sharing: nothing plays here
+    buddy.share.on_action("love")
+    assert buddy.sm.state != State.POKED
+    buddy.quiet = False
+    buddy.cfg["language"] = "hinglish"
+
+
+def test_live_link_ids_are_made_once(buddy):
+    from saarthi import share as sh
+
+    buddy.cfg["share_room"] = buddy.cfg["share_token"] = ""
+    room, token = sh.ensure_ids(buddy.cfg)
+    assert len(room) >= 16 and len(token) >= 32 and sh.ensure_ids(buddy.cfg) == (room, token)
+    buddy.cfg["share_url"] = "https://saarthi-live.example.workers.dev/"
+    assert sh.link(buddy.cfg) == f"https://saarthi-live.example.workers.dev/v/{room}"
+    buddy.cfg["share_url"] = ""
+
+
+def test_green_dot_when_they_open_the_link(buddy, monkeypatch):
+    said = []
+    monkeypatch.setattr(buddy, "say", lambda text, *a, **k: said.append(text))
+    buddy.cfg["share_friend"] = "Riya"
+    buddy.cfg["language"] = "en"
+    buddy.share._message('{"type": "viewers", "count": 1}')
+    assert buddy.win.presence and said == ["Riya is online 💚"]
+    buddy.share._message('{"type": "viewers", "count": 2}')  # a second tab: no new line
+    assert said == ["Riya is online 💚"]
+    buddy.share._message('{"type": "viewers", "count": 0}')
+    assert not buddy.win.presence
+    buddy.cfg["language"] = "hinglish"

@@ -1,0 +1,13 @@
+{
+  "name": "saarthi-live",
+  "private": true,
+  "scripts": {
+    "skin": "node scripts/copy-skin.mjs",
+    "dev": "npm run skin && wrangler dev",
+    "deploy": "npm run skin && wrangler deploy",
+    "test": "node --no-warnings --experimental-websocket test/relay.test.mjs"
+  },
+  "devDependencies": {
+    "wrangler": "^4"
+  }
+}

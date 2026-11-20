@@ -92,11 +92,11 @@ class LaptopReactions:
             self._flash = ("full", now + FLASH_SECONDS)
         if name in URGENT:
             self.b.alert()
-            self.b.say(text, 9000 if name == "battery_critical" else 6000, force=True)
+            self.b.say_shared(text, 9000 if name == "battery_critical" else 6000, force=True)
         else:
             from .app import HIGH, NORMAL
 
-            self.b.say(text, 5000, priority=HIGH if name in IMPORTANT else NORMAL)
+            self.b.say_shared(text, 5000, priority=HIGH if name in IMPORTANT else NORMAL)
         self.refresh_looks(now)
 
     def refresh_looks(self, now: float) -> None:
@@ -162,7 +162,7 @@ class LaptopReactions:
         win.move(g.right() - win.width() - 40, g.bottom() - win.height() - 20)
         self.b.save_position()
         self.b.follow_bubble()
-        QTimer.singleShot(400, lambda: self.b.say(line_for("big_screen", self.b.cfg["language"])))
+        QTimer.singleShot(400, lambda: self.b.say_shared(line_for("big_screen", self.b.cfg["language"])))
 
     def _still_on_screen(self) -> None:
         """A monitor was unplugged: come back if we were on it."""
