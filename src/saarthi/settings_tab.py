@@ -262,6 +262,10 @@ class SettingsTab(QScrollArea):
         btn = QPushButton("Tell me the weather now")
         btn.clicked.connect(self.buddy.outdoor.say_weather)
         f.addRow(btn)
+        brief = QTimeEdit(QTime.fromString(cfg["brief_at"], "HH:mm"), displayFormat="HH:mm")
+        brief.timeChanged.connect(lambda t: cfg.__setitem__("brief_at", t.toString("HH:mm")))
+        f.addRow("Morning brief at", brief)
+        f.addRow(_gray("Today's plan and the weather, once a day, as soon as you're at the laptop after this time."))
         return box
 
     def _weather_toggled(self, on):

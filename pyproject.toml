@@ -16,6 +16,7 @@ dependencies = [
     "recurring-ical-events>=2.1",
     "pynput>=1.7",
     "psutil>=5.9",
+    "pydantic>=2.5",
     "evdev>=1.6; sys_platform == 'linux'",
     "jeepney>=0.8; sys_platform == 'linux'",
     "winrt-Windows.Media.Control>=2.0; sys_platform == 'win32'",

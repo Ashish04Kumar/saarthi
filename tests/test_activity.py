@@ -85,3 +85,36 @@ def test_evdev_wheel_and_touchpad_scroll():
     e._on_event("tp", ev(1, 333, 0))
     e._on_event("tp", ev(3, 54, 500))  # one finger moving: not a scroll
     assert scrolls.rate() * 10 == 1 + 3
+
+
+def test_youtube_music_video_and_tutorial_are_told_apart():
+    def kind(title, channel=""):
+        m = classify("Chrome", title, channel, window_title=f"{title} - YouTube - Google Chrome")
+        return "tutorial" if m.kind == "video" and m.tutorial else m.kind
+
+    assert kind("Kesariya - Brahmastra | Official Video", "Sony Music India") == "music"
+    assert kind("Tum Hi Ho", "Arijit Singh - Topic") == "music"
+    assert kind("Pasoori (Lyrics) ft. Shae Gill", "Coke Studio") == "music"
+    assert kind("JavaScript Tutorial For Beginners", "Intellipaat") == "tutorial"
+    assert kind("Python full course in Hindi", "CodeWithHarry") == "tutorial"
+    assert kind("Guitar lesson: Tum Hi Ho song", "Guitar Guru") == "tutorial"  # study words beat song words
+    assert kind("INSTRUMENTAL THEME MUSIC | LAXMIKANT PYARELAL | 40 MUSICIANS", "Siddharth Entertainers") == "music"
+    assert kind("Sitar for focus and calm", "Shanti") == "music"
+    assert kind("Music theory for beginners", "Music Matters") == "tutorial"  # study words beat music hints
+    assert kind("Live at the hall", "The Sky Band") == "music"  # channel hint
+    assert kind("Piano tutorial: Tum Hi Ho", "Learn Keys") == "tutorial"  # study words beat instrument words
+    assert kind("Manali trip vlog | Day 2", "Travel Bro") == "video"
+    assert kind("Kapil Sharma Show Ep 12", "SET India") == "video"
+
+
+def test_lines_take_turns_instead_of_repeating():
+    from saarthi.lines import LINES, line_for
+    from saarthi.states import State
+
+    options = LINES["en"][State.SCROLLING]
+    for _ in range(3):
+        said = [line_for(State.SCROLLING, "en") for _ in options]
+        assert sorted(said) == sorted(options)  # each one once per round
+    assert not any("five more minutes" in line for line in options)
+    seq = [line_for(State.SCROLLING, "en") for _ in range(40)]
+    assert all(a != b for a, b in zip(seq, seq[1:], strict=False))  # never twice in a row

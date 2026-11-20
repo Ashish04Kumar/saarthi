@@ -12,8 +12,9 @@ TAU = 2 * math.pi
 # state: (frames, fps, loop)
 STATES = {
     "idle": (24, 10, True),
-    "idle.tired": (24, 8, True),  # battery low: droopy, yawning
+    "idle.tired": (24, 6, True),  # battery low: sits slumped, slow breathing
     "idle.hot": (24, 10, True),  # laptop running hot: fans himself, sweating
+    "idle.music": (24, 10, True),  # music playing: headphones, head bob, finger snaps, notes
     "typing_fast": (12, 12, True),
     "typing_slow": (20, 8, True),
     "scrolling": (16, 8, True),
@@ -88,19 +89,17 @@ def pose_for(state: str, t: float) -> Pose:
             p.eyes = "closed"
         return p
 
-    if state == "idle.tired":
-        sway = math.sin(TAU * ph)
-        p = stand(-0.03 + 0.008 * sway)
-        p.head = add(p.head, dz=0.03)
-        for side, sx in (("a", -1), ("b", 1)):  # arms hang loose
-            setattr(p, f"el_{side}", (sx * 0.38, 0.80, 0.02))
-            setattr(p, f"wr_{side}", (sx * 0.40, 0.54, 0.04))
-        yawn = 0.45 < ph < 0.75
-        if yawn:  # hand over the yawn
-            p.el_b, p.wr_b = (0.40, 0.98, 0.20), (0.12, 1.36, 0.36)
-        p.head_rot = (0.22 - (0.25 if yawn else 0.0), 0.0, 0.10 * sway)
-        p.eyes = "closed" if yawn else "half"
-        p.brows, p.mouth = "sleepy", ("open" if yawn else "flat")
+    if state == "idle.tired":  # battery low: sits down, slumped, hardly moves (just slow breathing)
+        breath = math.sin(TAU * ph)
+        p = sit(0.006 * breath, lean=0.06)
+        p.props = {"glow": 0.0}  # no laptop
+        p.head = add(p.head, dy=-0.05, dz=0.05)
+        p.head_rot = (0.32, 0.0, 0.10)  # head hanging, a little to one side
+        for side, sx in (("a", -1), ("b", 1)):  # arms resting on the knees
+            setattr(p, f"el_{side}", (sx * 0.40, 0.40, 0.12))
+            setattr(p, f"wr_{side}", (sx * 0.30, 0.22, 0.30))
+        p.eyes = "closed" if 0.55 < ph < 0.75 else "half"  # one slow, heavy blink
+        p.brows, p.mouth = "sleepy", "flat"
         return p
 
     if state == "idle.hot":
@@ -111,6 +110,22 @@ def pose_for(state: str, t: float) -> Pose:
         p.head_rot = (-0.08, -0.10, 0.04)
         p.eyes, p.brows, p.mouth = "half", "sleepy", "open"
         p.props["sweat"] = ph * 2 % 1.0
+        return p
+
+    if state == "idle.music":
+        beat = math.sin(TAU * ph * 4)  # four beats a loop
+        bob = max(0.0, beat)
+        p = stand(-0.012 * bob)
+        p.offset = (0.015 * math.sin(TAU * ph * 2), 0, 0)  # sway
+        p.head_rot = (0.10 * bob, 0.08 * math.sin(TAU * ph * 2), 0.07 * math.sin(TAU * ph * 2))
+        snap = max(0.0, math.sin(TAU * ph * 4 + 0.6))
+        p.el_b, p.wr_b = (0.46, 0.92, 0.12), (0.40 + 0.04 * snap, 1.12 + 0.05 * snap, 0.26)  # snapping
+        p.el_a, p.wr_a = (-0.40, 0.82, 0.04), (-0.36, 0.60, 0.10)
+        tap = max(0.0, math.sin(TAU * ph * 4 + 1.2))
+        p.an_b = add(p.an_b, dy=0.03 * tap)  # toe tap
+        p.eyes = "happy" if ph % 0.5 < 0.35 else "closed"
+        p.mouth = "o" if 0.25 < ph % 0.5 < 0.4 else "smile"
+        p.props.update(headphones=True, notes=ph)
         return p
 
     if state == "typing_fast":

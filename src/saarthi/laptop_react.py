@@ -119,6 +119,10 @@ class LaptopReactions:
                 take = "tired"
             elif self.watch.hot:
                 take = "hot"
+        a = getattr(self.b, "activity", None)
+        critical = take == "tired" and pct <= BATTERY_CRITICAL
+        if a is not None and a.music_playing and not critical:
+            take = "music"  # headphones on; a low battery still shows in the badge
         win.set_badge(badge, pct)
         win.set_variant(State.IDLE, take)
 

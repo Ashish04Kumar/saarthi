@@ -22,7 +22,11 @@ from .wellness import Wellness
 from .window import BuddyWindow
 
 SIZES = {"Small": 110, "Medium": 160, "Large": 220, "Huge": 300}
-CHATTY = {State.TYPING_FAST, State.WATCHING, State.WAKING, State.STRETCH, State.SCROLLING}
+CHATTY = {State.TYPING_FAST, State.WATCHING, State.WAKING, State.STRETCH}
+# Scrolling only gets a line after a long stretch of it (short pauses, e.g. to read, don't end the stretch)
+SCROLL_TALK_AFTER = 120.0  # s of scrolling before the first tip
+SCROLL_TALK_AGAIN = 600.0  # then at most one more every 10 min while it goes on
+SCROLL_PAUSE_OK = 20.0  # s without scrolling that still count as the same stretch
 AUTO_LINE_GAP = 60.0  # seconds between unprompted state-change lines
 # What the character does while you watch: a study video gets notes / hand-on-chin / trying the code,
 # anything else gets popcorn / a laugh / a cold drink. It switches between them every so often.
@@ -84,8 +88,16 @@ class Saarthi:
         from .laptop_react import LaptopReactions
 
         self.laptop = LaptopReactions(self)
+        from .glitch import GlitchLink
+
+        self.state_now = None  # schema.SaarthiState: everything that drives the character right now
+        self.glitch = GlitchLink("" if demo else (self.cfg["glitch_url"] or ""))
+        self.glitch.start()
         self._sim: tuple | None = None  # (Activity, until) from the Try menu
-        self._watch: tuple[bool, float] | None = None  # (study video?, switch take at) while watching
+        self._watch: tuple[bool, float] | None = None
+        self._scroll: list[float] | None = (
+            None  # [stretch started, last scroll seen, last tip]  # (study video?, switch take at) while watching
+        )
         self._clicks: list[float] = []
         self.quiet = False  # screen-share mode: small, in a corner, no pop-ups
         self._quiet_saved: tuple | None = None
@@ -124,11 +136,39 @@ class Saarthi:
         music_started = activity.music_playing and not self.music_was_playing
         if music_started and now - self.last_line_at > AUTO_LINE_GAP and random.random() < 0.5:
             self.say(line_for("music", self.cfg["language"]), priority=LOW)
+        if activity.music_playing != self.music_was_playing:
+            self.laptop.refresh_looks(now)  # put the headphones on / take them off right away
         self.music_was_playing = activity.music_playing
         self.win.set_state(state, self.sm.entered_at if self.sm.preview is None else self.win.state_started)
         self._update_watch_take(state, activity, now)
+        self._long_scroll(state, now)
+        self._publish_state(state, activity)
         if state != before and self.sm.preview is None:
             self.on_state_change(state, now)
+
+    def _publish_state(self, state: State, activity) -> None:
+        """Keep the parent schema (schema.SaarthiState) current and offer it to Glitch."""
+        from . import schema
+
+        th = self.sm.th
+        self.state_now = schema.build(
+            activity, state.value, self.win.variant(state) or "", th.fast_kps, th.slow_kps, th.scroll_ps
+        )
+        self.glitch.offer(self.state_now)
+
+    def _long_scroll(self, state: State, now: float) -> None:
+        """A tip only after you've been scrolling for a while, not every time you scroll."""
+        if state == State.SCROLLING:
+            if self._scroll is None:
+                self._scroll = [now, now, 0.0]
+            self._scroll[1] = now
+            started, _, tipped = self._scroll
+            due = SCROLL_TALK_AFTER if not tipped else SCROLL_TALK_AGAIN
+            if now - (tipped or started) >= due:
+                self._scroll[2] = now
+                self.say(line_for(State.SCROLLING, self.cfg["language"]), 6000, priority=LOW)
+        elif self._scroll is not None and now - self._scroll[1] > SCROLL_PAUSE_OK:
+            self._scroll = None
 
     def _update_watch_take(self, state: State, activity, now: float) -> None:
         if state != State.WATCHING:
@@ -332,6 +372,7 @@ class Saarthi:
     def shutdown(self):
         self.source.stop()
         self.laptop.stop()
+        self.glitch.stop()
         self.org.stop()
 
     def on_tray(self, reason):

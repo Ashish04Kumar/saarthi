@@ -82,6 +82,7 @@ class Activity:
     media_site: str | None = None  # "youtube", "udemy", ...
     media_tutorial: bool = False
     media_title: str = ""
+    media_channel: str = ""  # artist / YouTube channel
 
 
 @dataclass

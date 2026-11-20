@@ -50,9 +50,41 @@ SITES = {
 COURSE_SITES = {"udemy", "coursera", "linkedin", "pluralsight", "skillshare"}
 TUTORIAL = re.compile(
     r"\b(tutorial|course|lecture|lesson|learn(ing)?|beginners?|crash course|how to|explained|"
-    r"bootcamp|masterclass|chapter|part \d+|full course|in \d+ (minutes|hours)|interview prep|dsa)\b",
+    r"bootcamp|masterclass|chapter|part \d+|full course|in \d+ (minutes|hours)|interview prep|dsa|"
+    r"sikho|seekho|sikhe|seekhe|samjho|samjhe|padhai|in hindi)\b",
     re.IGNORECASE,
 )
+# A song on plain YouTube: the channel gives it away ("Arijit Singh - Topic", VEVO, music labels) ...
+MUSIC_CHANNEL = re.compile(
+    r"(- topic$|vevo|t-series|zee music|sony music|tips official|saregama|speed records|white hill|"
+    r"desi music factory|yrf|times music|aditya music|lahari|think music|warner music|universal music|"
+    r"atlantic records|lofi girl)",
+    re.IGNORECASE,
+)
+# weaker hints in a channel name: checked after the study words
+MUSIC_CHANNEL_HINT = re.compile(r"(music|records|entertainers|beats|melod|orchestra|band\b)", re.IGNORECASE)
+# ... or the title does
+MUSIC_TITLE = re.compile(
+    r"(\bofficial (music |lyric(al)? )?(video|audio)\b|\blyrics?\b|\blyrical\b|\b(full|video|audio) song\b|"
+    r"\bsongs?\b|\bft\.|\bfeat\.|\bjukebox\b|\bremix\b|\blo-?fi\b|\bslowed\b|\bmashup\b|\(audio\)|"
+    r"\bmusic\b|\bmusicians?\b|\binstrumental\b|\borchestra\b|\bsymphony\b|\bconcert\b|\bunplugged\b|"
+    r"\bkaraoke\b|\bcover\b|\bplaylist\b|\bbgm\b|\bost\b|\bsoundtrack\b|\bqawwali\b|\bghazal\b|"
+    r"\bbhajan\b|\bsitar\b|\bflute\b|\bpiano\b|\bguitar\b|\bvioli?n\b|\btabla\b|\bsaxophone\b|\btrumpet\b)",
+    re.IGNORECASE,
+)
+
+
+def youtube_kind(title: str, channel: str = "", window_title: str = "") -> str:
+    """For a video in a browser: "music", "tutorial" or "video".
+    A music label's channel wins; then study words ("Guitar lesson: Tum Hi Ho" is a tutorial); then music
+    words in the title or channel name ("Instrumental theme", "Siddharth Entertainers")."""
+    if MUSIC_CHANNEL.search(channel.strip()):
+        return "music"
+    if TUTORIAL.search(title) or TUTORIAL.search(window_title):
+        return "tutorial"
+    if MUSIC_TITLE.search(title) or MUSIC_TITLE.search(window_title) or MUSIC_CHANNEL_HINT.search(channel):
+        return "music"
+    return "video"
 
 
 @dataclass
@@ -62,6 +94,7 @@ class MediaInfo:
     tutorial: bool = False
     title: str = ""
     player: str = ""
+    channel: str = ""  # artist / YouTube channel, when the player tells
 
 
 def _has(name: str, words: tuple[str, ...]) -> bool:
@@ -83,11 +116,15 @@ def classify(player: str, title: str, artist: str = "", window_title: str = "") 
     """Classify something that is currently *playing*."""
     site = site_of(window_title, title)
     if site == "youtube_music" or (_has(player, MUSIC_APPS) and not _has(player, BROWSERS)):
-        return MediaInfo("music", "youtube_music" if site == "youtube_music" else None, False, title, player)
+        return MediaInfo("music", "youtube_music" if site == "youtube_music" else None, False, title, player, artist)
     if not (_has(player, BROWSERS) or _has(player, VIDEO_APPS) or site):
         return None
-    tutorial = site in COURSE_SITES or bool(TUTORIAL.search(title)) or bool(TUTORIAL.search(window_title))
-    return MediaInfo("video", site, tutorial, title, player)
+    if site in COURSE_SITES:
+        return MediaInfo("video", site, True, title, player, artist)
+    kind = youtube_kind(title, artist, window_title)
+    if kind == "music":
+        return MediaInfo("music", site, False, title, player, artist)
+    return MediaInfo("video", site, kind == "tutorial", title, player, artist)
 
 
 def classify_window_title(window_title: str) -> MediaInfo | None:
@@ -95,8 +132,12 @@ def classify_window_title(window_title: str) -> MediaInfo | None:
     site = site_of(window_title)
     if site is None or site == "youtube_music":
         return None
-    tutorial = site in COURSE_SITES or bool(TUTORIAL.search(window_title))
-    return MediaInfo("video", site, tutorial, window_title, "window")
+    if site in COURSE_SITES:
+        return MediaInfo("video", site, True, window_title, "window")
+    kind = youtube_kind("", "", window_title)
+    if kind == "music":
+        return MediaInfo("music", site, False, window_title, "window")
+    return MediaInfo("video", site, kind == "tutorial", window_title, "window")
 
 
 # ---------------- probes ----------------

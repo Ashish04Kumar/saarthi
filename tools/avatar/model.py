@@ -442,6 +442,32 @@ def props(pose: Pose, J, R):
                 for dx, dy, dz in ((-0.04, 0.0, 0.0), (0.04, 0.01, 0.02), (0.0, 0.03, -0.03), (0.0, 0.02, 0.05),
                                    (-0.05, 0.01, -0.04), (0.05, 0.0, -0.03))])),
         ], BUCKET_C + V(0, 0.05, 0), 0.25))
+    if pr.get("headphones"):
+        def on_head(x, y, z=-0.02):
+            return hc + R @ V(x, y, z)
+
+        arc = [(0.39, 0.02), (0.37, 0.28), (0.23, 0.46), (0.0, 0.53), (-0.23, 0.46), (-0.37, 0.28), (-0.39, 0.02)]
+        pts = [on_head(x, y) for x, y in arc]
+        cups = [on_head(0.40, -0.02), on_head(-0.40, -0.02)]
+        out.append(Group([
+            Part(STRAP, lambda p: np.minimum.reduce([capsule(p, a, b, 0.024) for a, b in zip(pts, pts[1:])])),
+            Part(RED, lambda p: np.minimum(ellipsoid((p - cups[0]) @ R, V(0, 0, 0), V(0.06, 0.11, 0.10)),
+                                           ellipsoid((p - cups[1]) @ R, V(0, 0, 0), V(0.06, 0.11, 0.10)))),
+        ], hc + R @ V(0, 0.2, 0), 0.8))
+    if pr.get("notes") is not None:
+        k = pr["notes"]
+        items = []
+        for i in range(2):
+            kk = (k + i / 2) % 1.0
+            if kk > 0.85:
+                continue
+            c = hc + V(0.52 + 0.10 * i + 0.06 * math.sin(kk * 6 + i), 0.10 + 0.55 * kk, 0.10)
+            s = 0.045 + 0.01 * i
+            items.append(Part(PUPIL, lambda p, c=c, s=s: np.minimum(
+                ellipsoid(p, c, V(s, s * 0.75, s * 0.6)),
+                capsule(p, c + V(s * 0.85, 0, 0), c + V(s * 0.85, s * 3.2, 0), s * 0.22))))
+        if items:
+            out.append(Group(items, hc + V(0.6, 0.45, 0.1), 0.6))
     if pr.get("sweat") is not None:
         k = pr["sweat"]
         c = hc + R @ V(0.37, 0.20 - 0.25 * k, 0.12)
