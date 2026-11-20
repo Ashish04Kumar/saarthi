@@ -276,3 +276,85 @@ def test_minutes_picker_sets_and_changes_session_length(buddy, monkeypatch):
     assert not buddy.toggle_status("break")  # cancelled picker: nothing starts
     assert buddy.wellness.status == "working"
     buddy.cfg["lunch_minutes"] = default_before
+
+
+def test_music_puts_headphones_on_even_on_low_battery(buddy, monkeypatch):
+    from saarthi.states import Activity, State
+
+    lap = buddy.laptop
+    now = time.monotonic()
+    buddy.activity = Activity(music_playing=True)
+    lap.refresh_looks(now)
+    assert buddy.win.variant(State.IDLE) == "music"
+    monkeypatch.setattr(lap.watch, "low_battery", lambda: True)
+    monkeypatch.setattr(lap.probe, "power", (12.0, False))
+    lap.refresh_looks(now)
+    assert buddy.win.variant(State.IDLE) == "music" and buddy.win.badge == "low"  # badge still says it
+    monkeypatch.setattr(lap.probe, "power", (4.0, False))
+    lap.refresh_looks(now)
+    assert buddy.win.variant(State.IDLE) == "tired"  # at 5% the battery wins
+    buddy.activity = Activity()
+    monkeypatch.setattr(lap.watch, "low_battery", lambda: False)
+    lap.refresh_looks(now)
+    assert buddy.win.variant(State.IDLE) is None
+
+
+def test_no_strolls_while_tired(buddy, monkeypatch):
+    import random
+
+    from saarthi.states import State
+
+    buddy.walker.cancel()
+    buddy.cfg["walk_enabled"] = True
+    monkeypatch.setattr(random, "random", lambda: 0.0)  # "always decide to stroll"
+    buddy.sm.state = State.IDLE
+    buddy.win.set_variant(State.IDLE, "tired")
+    buddy.walker._maybe_stroll()
+    assert not buddy.walker.walking
+    buddy.win.set_variant(State.IDLE, None)
+
+
+def test_morning_brief_waits_for_its_time(buddy, monkeypatch):
+    from datetime import datetime
+
+    from saarthi.organizer import brief_time
+    from saarthi.states import State
+
+    org = buddy.org
+    shown = []
+    monkeypatch.setattr(org, "brief_now", lambda now=None, delay_ms=0: shown.append(now))
+    buddy.cfg["brief_at"] = "10:45"
+    org.store.meta.pop("last_brief", None)
+    org.maybe_brief(datetime(2026, 11, 21, 9, 30), State.IDLE)
+    org.maybe_brief(datetime(2026, 11, 21, 10, 44), State.IDLE)
+    assert shown == []
+    org.maybe_brief(datetime(2026, 11, 21, 10, 50), State.AFK)  # away: waits until you're back
+    assert shown == []
+    org.maybe_brief(datetime(2026, 11, 21, 11, 5), State.TYPING_FAST)
+    org.maybe_brief(datetime(2026, 11, 21, 15, 0), State.IDLE)  # once a day
+    assert len(shown) == 1
+    assert brief_time("7:5") == "07:05" and brief_time("nonsense") == "05:00"
+    buddy.cfg["brief_at"] = "05:00"
+
+
+def test_scroll_tip_only_after_a_long_stretch(buddy, monkeypatch):
+    from saarthi import app as app_mod
+    from saarthi.states import State
+
+    said = []
+    monkeypatch.setattr(buddy, "say", lambda text, *a, **k: said.append(text))
+    buddy._scroll = None
+    t0 = 1000.0
+    for t in range(0, 100, 5):  # 100 s of scrolling: nothing yet
+        buddy._long_scroll(State.SCROLLING, t0 + t)
+    assert said == []
+    buddy._long_scroll(State.IDLE, t0 + 110)  # a short pause to read
+    for t in range(115, 130, 5):
+        buddy._long_scroll(State.SCROLLING, t0 + t)
+    assert len(said) == 1  # 2 min into the stretch
+    for t in range(130, 400, 5):
+        buddy._long_scroll(State.SCROLLING, t0 + t)
+    assert len(said) == 1  # not again for 10 min
+    buddy._long_scroll(State.IDLE, t0 + 400 + app_mod.SCROLL_PAUSE_OK + 1)  # a real stop
+    buddy._long_scroll(State.SCROLLING, t0 + 500)
+    assert buddy._scroll[0] == t0 + 500 and len(said) == 1  # a new stretch starts from zero

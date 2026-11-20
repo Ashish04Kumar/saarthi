@@ -20,9 +20,14 @@ LINES: dict[str, dict[str, list[str]]] = {
             "Writer's block? Chai pi lo ☕",
         ],
         State.SCROLLING: [
-            "Scroll, scroll, scroll... kuch mila? 👀",
-            "Ungli thak jayegi bhai!",
-            "Bas 5 minute aur scroll, phir kaam? 😏",
+            "Lamba page hai? Ctrl+F se seedha wahin pahuncho 🔍",
+            "Kuch kaam ka mila? Note me daal lo, baad me dhoondhna nahi padega 📝",
+            "Aankhein jhapkao 👀 Padhte waqt hum kam palak jhapakte hain",
+            "20-20-20: 20 min baad 20 sec ke liye 20 feet door dekho 👁️",
+            "Seedhe baitho, kandhe dheele 🪑",
+            "Docs padh rahe ho? Jawab aksar Examples wale hisse me hota hai 📘",
+            "Tip: Space dabao, poora page neeche khisak jaata hai ⌨️",
+            "Accha article? Bookmark kar lo, baad me aaraam se padhna 🔖",
         ],
         State.WATCHING: [
             "Main bhi dekh raha hoon, popcorn kahan hai? 🍿",
@@ -30,10 +35,14 @@ LINES: dict[str, dict[str, list[str]]] = {
             "Ek aur episode? Theek hai, bas ek 😏",
         ],
         "watching:tutorial": [
-            "Padhai chal rahi hai! Notes bana lo, baad me kaam aayenge 📝",
-            "Tutorial dekh ke code bhi karna, sirf dekhne se nahi hoga 😉",
-            "Pause karke khud try karo, phir aage badho 💪",
-            "2x speed pe dekho, time bachao ⏩",
+            "Main point apne shabdon me likh lo, yaad reh jaayega 📝",
+            "Editor saath me kholo aur video ke saath code karo 💻",
+            "Kuch miss hua? YouTube pe J dabao, 10 sec peeche ⏪",
+            "Dheema lag raha hai? Shift + > se speed badhao ⏩",
+            "Mushkil shabd aa rahe hain? Captions on kar lo (C key) 🔤",
+            "Video ke baad isse ek chhoti cheez bana ke dekhna 🛠️",
+            "Kisi ko samjhane ki tarah bol ke dekho, pakka ho jaayega 🗣️",
+            "Lamba course hai? Har 25 min pe 5 min ka break ⏸️",
         ],
         "watching:udemy": [
             "Udemy course! Certificate pakka 🎓",
@@ -121,9 +130,27 @@ LINES: dict[str, dict[str, list[str]]] = {
     "en": {
         State.TYPING_FAST: ["You're on fire! 🔥", "Keyboard's begging for mercy 😅", "Flow state. I'll stay quiet 🤐"],
         State.TYPING_SLOW: ["Thinking it through... 🤔", "Every word counts."],
-        State.SCROLLING: ["Scroll, scroll, scroll... found it yet? 👀", "Just five more minutes? 😏"],
+        State.SCROLLING: [
+            "Long page? Ctrl+F gets you there faster 🔍",
+            "Found something useful? Put it in a note so you don't have to hunt again 📝",
+            "Blink a few times 👀 We blink less while reading",
+            "20-20-20: every 20 min, look 20 feet away for 20 seconds 👁️",
+            "Sit up straight, relax your shoulders 🪑",
+            "Reading docs? The answer is often in the Examples section 📘",
+            "Tip: Space scrolls down a whole page ⌨️",
+            "Good article? Bookmark it and read it properly later 🔖",
+        ],
         State.WATCHING: ["Got popcorn? 🍿", "Good one! 😄"],
-        "watching:tutorial": ["Learning time! Take notes 📝", "Pause and try it yourself 💪"],
+        "watching:tutorial": [
+            "Write the key point in your own words, it'll stick 📝",
+            "Open your editor and code along with the video 💻",
+            "Missed something? Press J on YouTube to go back 10 s ⏪",
+            "Too slow? Shift + > speeds it up ⏩",
+            "Tricky terms? Turn on captions with C 🔤",
+            "After this video, build one tiny thing with it 🛠️",
+            "Explain it out loud as if teaching someone, it'll click 🗣️",
+            "Long course? Take 5 minutes every 25 ⏸️",
+        ],
         "watching:udemy": ["Udemy course! Certificate incoming 🎓"],
         "watching:youtube": ["YouTube time 🍿 Just one video... right? 😏"],
         "poked": ["Ouch! 😣", "Hey! Not the head 🤕", "What's up? 😅"],
@@ -185,4 +212,24 @@ def line_for(key: State | str, language: str = "hinglish", rng: random.Random | 
         return line_for(State(key.split(":", 1)[0]), language, rng)
     if not options:
         return None
-    return (rng or random).choice(options)
+    if rng is not None:
+        return rng.choice(options)
+    return _next_fresh((language, str(key)), options)
+
+
+_bags: dict[tuple[str, str], list[str]] = {}
+_last: dict[tuple[str, str], str] = {}
+
+
+def _next_fresh(slot: tuple[str, str], options: list[str]) -> str:
+    """Every line of a list once, in a random order, before any comes again (and never twice in a row)."""
+    bag = _bags.get(slot)
+    if not bag or any(line not in options for line in bag):
+        bag = list(options)
+        random.shuffle(bag)
+        if len(bag) > 1 and bag[-1] == _last.get(slot):
+            bag[0], bag[-1] = bag[-1], bag[0]
+        _bags[slot] = bag
+    line = bag.pop()
+    _last[slot] = line
+    return line

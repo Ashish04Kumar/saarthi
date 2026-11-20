@@ -41,6 +41,8 @@ DEFAULTS: dict[str, Any] = {
     "breathing_cycles": 5,
     "walk_enabled": True,
     "lunch_minutes": 60,
+    "brief_at": "05:00",  # morning brief: the first time you're at the laptop after this time each day
+    "glitch_url": "",  # e.g. http://127.0.0.1:8400: send Saarthi's state (schema.py) to your Glitch
     "laptop_alerts": True,  # battery, charger, heat, internet, headphones, volume, late night
     "developer": False,  # the author's own machine: hides the developer credit
     "theme": "auto",  # auto / dark / light for Saarthi's own pop-ups

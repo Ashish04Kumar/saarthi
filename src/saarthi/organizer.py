@@ -19,6 +19,17 @@ SYNC_EVERY_MS = 15 * 60_000
 QUIET_STATES = {State.SLEEPING, State.AFK, State.TYPING_FAST, State.BREAK, State.BREATHE}
 
 
+def brief_time(value) -> str:
+    """'10:45' -> '10:45'; anything odd falls back to 05:00."""
+    try:
+        h, m = (int(x) for x in str(value).split(":"))
+        if 0 <= h < 24 and 0 <= m < 60:
+            return f"{h:02d}:{m:02d}"
+    except ValueError:
+        pass
+    return "05:00"
+
+
 class _SyncSignal(QObject):
     done = Signal(object, object)
 
@@ -56,8 +67,11 @@ class Organizer:
         self.maybe_brief(now, state)
 
     def maybe_brief(self, now: datetime, state: State):
+        """Once a day: the first time you're at the laptop after `brief_at` (default 05:00)."""
         today = now.date().isoformat()
-        if self.store.meta.get("last_brief") == today or now.hour < 5 or state in (State.SLEEPING, State.AFK):
+        if self.store.meta.get("last_brief") == today or state in (State.SLEEPING, State.AFK):
+            return
+        if now.strftime("%H:%M") < brief_time(self.buddy.cfg["brief_at"]):
             return
         outdoor = getattr(self.buddy, "outdoor", None)
         if outdoor is not None and outdoor.waiting_for_first_weather():

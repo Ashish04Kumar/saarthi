@@ -66,6 +66,7 @@ def technical() -> list:
                  ["ical_sync.py", "Fetch + expand iCal feeds"],
                  ["wellness.py, wellness_logic.py", "Break / lunch / breathing sessions, typing streaks"],
                  ["walker.py", "Random strolls, break and lunch pacing, return home"],
+                 ["schema.py, glitch.py", "SaarthiState (what drives the character); optional sender to glitch_url"],
                  ["laptop.py", "LaptopProbe thread (sensors) and LaptopWatch (thresholds, cool-downs → events)"],
                  ["laptop_react.py", "Lines, battery badge, tired / hot looks, moving to the bigger monitor"],
                  ["outdoor.py, weather.py, commute.py, net.py", "Weather, outfits, rain warning, routing"],
@@ -99,9 +100,15 @@ def technical() -> list:
                  ["Media playing", "MPRIS", "MPRIS + xprop title", "Media session + title",
                   "Spotify/Music + browser tab"]], [26, 37, 37, 37, 37]),
           P("Privacy: input listeners only record a timestamp per key press (kept 3 s to compute keys per second). "
-            "Key codes are never read or stored. Touchpad two-finger movement is converted to scroll ticks. Video "
-            "context is classified from player names and titles: course sites (Udemy, Coursera …) or words like "
-            "“tutorial”, “course”, “for beginners” mark a tutorial; music players and YouTube Music count as music."),
+            "Key codes are never read or stored. Touchpad two-finger movement is converted to scroll ticks."),
+          P("Music, tutorial or video", "h2"),
+          P("What's playing is classified from the player, its title and its channel (MPRIS xesam:artist), in this "
+            "order: a music player or YouTube Music → music; a course site (Udemy, Coursera …) → tutorial; a music "
+            "label's channel (“Artist - Topic”, VEVO, T-Series, Sony Music, Saregama …) → music; study words "
+            "(tutorial, course, lecture, for beginners, how to, explained, dsa, sikho, samjho, padhai, in hindi) → "
+            "tutorial; music words in the title or channel (song, lyrics, official video, instrumental, music, "
+            "orchestra, sitar, flute, remix, lofi …) → music; anything else → video. So “Piano tutorial” stays a "
+            "tutorial and “Instrumental theme music” is music."),
           P("State machine", "h2"),
           table([["Rule", "Value"],
                  ["Typing fast / slow", "≥ 4 keys/s / ≥ 0.3 keys/s"],
@@ -112,7 +119,9 @@ def technical() -> list:
                  ["Sessions", "break, lunch (eat → think), breathe: held until the session ends"],
                  ["Fallbacks", "Missing skin states fall back, e.g. typing_fast → typing_slow → idle, eat → break"],
                  ["Takes", "Optional alternative animations per state: watching (study: notes, chin, try; other: "
-                  "popcorn, laugh, sip, switched every 25–50 s), idle (tired, hot), poked (boots, jeans)"]],
+                  "popcorn, laugh, sip, switched every 25–50 s), idle (music, tired, hot), poked (boots, jeans)"],
+                 ["Idle takes", "music (headphones) > tired (battery ≤ 15%, sits down, no strolls) > hot (fanning); "
+                  "below 5% battery tired wins over music"]],
                 [48, 126])]
 
     s += [P("6. Who goes first (arbitration)", "h1"),
@@ -128,8 +137,12 @@ def technical() -> list:
               "<b>Quiet mode</b> (screen share) shrinks the buddy to 90 px in the corner, hides bubbles, cards, "
               "panel and tray messages, and blocks offers and strolls. Cards created meanwhile are kept hidden and "
               "shown when quiet mode ends.",
-              "<b>Walking guards</b>: no strolls while typing, during sessions, while a panel/card is open, or in "
-              "quiet mode; breathing cancels a walk."])]
+              "<b>Walking guards</b>: no strolls while typing, during sessions, while a panel/card is open, while "
+              "tired (low battery) or in quiet mode; breathing cancels a walk.",
+              "<b>Lines take turns.</b> Each list plays every line once, in a random order, before any repeats, "
+              "and never the same line twice in a row.",
+              "<b>Scroll tips</b> only after 2 minutes of scrolling (pauses under 20 s keep the stretch going), then "
+              "at most once every 10 minutes. Tutorial lines are practical study tips."])]
 
     s += [P("7. Reminders, calendar, quotes", "h1"),
           bullets([
@@ -142,7 +155,9 @@ def technical() -> list:
               "Fired alerts are remembered for 3 days so they never repeat.",
               "Quote lists pick a random line every <i>min…max</i> minutes (the no-smoking list: 40 min), "
               "skipped while typing fast, away, asleep or in a session.",
-              "Morning brief: first time you're active after 05:00 each day; waits up to 25 s for weather."])]
+              "Morning brief: the first time you're active after <i>brief_at</i> (Settings → Weather, default 05:00) "
+              "each day, never while away or asleep; waits up to 25 s for weather. Remembered on disk, so restarts "
+              "don't repeat it; a closed lid just delays it."])]
 
     s += [P("8. Wellness", "h1"),
           table([["Session", "How it works"],
@@ -175,7 +190,8 @@ def technical() -> list:
           P("Measured on the development laptop: 2 wake-ups in 10 idle seconds (the CPU sample). Every quick "
             "plug / unplug or Wi-Fi off / on gets its own reaction, and a newer line replaces the older one."),
           table([["Event", "Rule", "Reaction"],
-                 ["Battery low", "Unplugged and ≤ 15%, then ≤ 10% (once each)", "Tired idle take, red badge, line"],
+                 ["Battery low", "Unplugged and ≤ 15%, then ≤ 10% (once each)",
+                  "Sits down worn out (tired take), red badge, line"],
                  ["Battery critical", "Unplugged and ≤ 5%, repeats every 2 min", "Blinking badge, alert sign, loud line"],
                  ["Charger in / out", "power_plugged changes", "Happy + green ⚡ badge / line with %"],
                  ["Battery full", "Plugged and 100% (once per charge)", "“Unplug the charger”"],
@@ -191,7 +207,21 @@ def technical() -> list:
                  ["Monitor plugged in", "Qt screenAdded", "Moves to the largest screen; returns if it's unplugged"]],
                 [32, 82, 60])]
 
-    s += [P("11. Network services", "h1"),
+    s += [P("11. State schema", "h1"),
+          P("<i>schema.py</i> keeps what Saarthi works out about you, and what the character does about it, in one "
+            "Pydantic model, <b>SaarthiState</b> (schema_version 1), built on every tick from the same readings the "
+            "animation uses."),
+          table([["Field", "Meaning"],
+                 ["typing, keys_per_sec", "none / slow / fast and the rate (never which keys)"],
+                 ["scrolling, scrolls_per_sec, idle_seconds", "From the input counters and the idle monitor"],
+                 ["media", "kind (music / video / tutorial), site, title, channel; null when nothing plays"],
+                 ["state, take", "The animation and its variant, e.g. watching / notes"],
+                 ["source, device, at", "linux / windows / macos, hostname, UTC time"]], [56, 118]),
+          P("With <i>glitch_url</i> set, <i>glitch.py</i> POSTs it to &lt;glitch_url&gt;/api/saarthi/state when the "
+            "moment changes (rates and idle seconds alone don't count) and every 30 s, on its own thread; failures are "
+            "silent. Weather, battery, reminders, breaks and walking stay out of the schema.")]
+
+    s += [P("12. Network services", "h1"),
           table([["Service", "Used for", "Key"],
                  ["Open-Meteo", "Weather forecast and city search", "none"],
                  ["ipapi.co / ipinfo.io", "Approximate city from IP (only in automatic mode)", "none"],
@@ -201,29 +231,31 @@ def technical() -> list:
                  ["TomTom Routing", "Live traffic", "free key"],
                  ["Google Routes API", "Live traffic", "billing key"],
                  ["iCal links", "Google / Outlook / Apple calendar (read-only)", "secret link"],
-                 ["1.1.1.1 / 8.8.8.8", "Online check: opens a TCP connection every 15 s, sends nothing", "none"]],
+                 ["1.1.1.1 / 8.8.8.8", "Online check: opens a TCP connection every 15 s, sends nothing", "none"],
+                 ["glitch_url (optional)", "The state schema, only if you set it (default: off)", "none"]],
                 [40, 104, 30])]
 
-    s += [P("12. Data and configuration", "h1"),
+    s += [P("13. Data and configuration", "h1"),
           table([["OS", "Config + data folder", "Installed app"],
                  ["Linux", "~/.config/saarthi/", "~/.local/share/saarthi/venv"],
                  ["Windows", "%APPDATA%\\Saarthi\\", "%LOCALAPPDATA%\\Saarthi\\venv"],
                  ["macOS", "~/Library/Application Support/Saarthi/", "…/Saarthi/app/venv"]], [24, 80, 70]),
           P("config.json holds settings (skin, size, language, theme, weather, commute, wellness, walking, "
-            "laptop alerts). "
+            "laptop alerts, morning brief time, glitch_url). "
             "data.json holds reminders, notes, events, feeds, quote lists, reminder history and cached feed events. "
             "Both are written atomically (temp file + rename). Custom skins live in the <i>skins/</i> sub-folder.")]
 
-    s += [P("13. Skins and the 3D avatar", "h1"),
+    s += [P("14. Skins and the 3D avatar", "h1"),
           P("A skin is a folder with <i>skin.json</i> and frames per state (PNG sequence, GIF or sprite sheet). "
             "The avatar tool renders a full-body character with a numpy signed-distance-field raymarcher: "
             "spheres, capsules, ellipsoids and boxes combined with smooth unions, toon shading, ambient occlusion, "
             "rim light and outlines, at 2× supersampling. Appearance is a <i>Look</i> (skin, hair, beard, shirt, "
             "slim, sleeves, watch …) and each state is a <i>Pose</i> function of time. Extra takes use "
             "<i>state.take</i> keys (e.g. <i>watching.notes</i>, frames in <i>watching_notes/</i>); props include "
-            "laptop, popcorn, notebook and pen, soda cup, tiffin, chai and thought bubbles."),
+            "laptop, popcorn, notebook and pen, soda cup, headphones and music notes, tiffin, chai and thought "
+            "bubbles."),
           code("python tools/avatar/build_skin.py ~/.config/saarthi/skins/me --name \"Me\""),
-          P("14. Packaging, startup and control", "h1"),
+          P("15. Packaging, startup and control", "h1"),
           bullets([
               "install.sh (Linux/macOS) and install.ps1 / install.bat (Windows) create a private virtualenv, "
               "add an app-menu entry / ~/Applications app / Start-menu shortcut, and start the app. "
@@ -231,15 +263,16 @@ def technical() -> list:
               "Start with the computer: ~/.config/autostart (Linux), HKCU Run key (Windows), LaunchAgent (macOS).",
               "Single instance through a QLocalServer: launching again shows the running buddy; "
               "<i>saarthi --quit</i> asks it to close."]),
-          P("15. Tests", "h1"),
-          P("72 automated tests (pytest): state machine, rate counters, media classification, evdev event "
+          P("16. Tests", "h1"),
+          P("84 automated tests (pytest): state machine, rate counters, media classification, evdev event "
             "handling, scheduler maths, iCal parsing, weather/route parsing, Maps links, autostart, typing streaks, "
             "laptop thresholds (battery levels, quick charger toggles, heat, Wi-Fi drop and reconnect retries, uptime, audio, late night), click zones "
-            "and pixel hit-testing, watching takes, "
+            "and pixel hit-testing, watching takes, music / video / tutorial titles, lines taking turns, long-scroll "
+            "tips, the brief time, music vs tired looks, the state schema and its sender (fake server), "
             "and 13 end-to-end scenarios on a real offscreen buddy (speech priorities, sessions vs reminders, typing "
             "cancels a break, lunch flow, minutes picker, quiet mode, panel ↔ full-window sync, delete, walking guards)."),
           code("pip install -e \".[dev]\"\npytest\nruff check src tests"),
-          P("16. Known limitations", "h1"),
+          P("17. Known limitations", "h1"),
           bullets([
               "Windows and macOS code paths are written but not yet tested on real machines.",
               "Linux Wayland needs the input group for typing detection; the window runs via XWayland.",
@@ -286,13 +319,16 @@ def features() -> list:
     s += [P("3. When it does what", "h1"),
           table([["When", "What it does"],
                  ["App starts", "Welcome tips (first run); a card if typing detection needs permission"],
-                 ["First time you're active each day", "Morning brief: today's events/reminders + weather"],
+                 ["First time you're at the laptop after the brief time (default 05:00)",
+                  "Morning brief: today's events/reminders + weather"],
                  ["Typing fast", "Types furiously, sweats"],
                  ["Typing slowly / thinking", "Hand on chin, thought bubble"],
                  ["Scrolling", "Eyes go up and down"],
                  ["Tutorial / course playing", "Takes notes, hand on chin, or pauses to try the code (no popcorn)"],
                  ["Any other video", "Popcorn, laughs, or sips a cold drink; switches every 25–50 s"],
-                 ["Music playing", "Sometimes comments on the music"],
+                 ["Music playing (incl. songs / instrumentals on YouTube)", "Headphones on, head bob, finger "
+                  "snaps, floating notes"],
+                 ["Scrolling for 2+ minutes", "A useful tip (Ctrl+F, 20-20-20, posture…), then at most every 10 min"],
                  ["3 min no input / 15 min", "Dozes off / falls asleep (Zzz)"],
                  ["You come back", "Jumps up: “Aa gaye!”"],
                  ["Reminder time", "Holds up a “!” sign + card: Done / Skipped / 10 min / 1 h"],
@@ -338,7 +374,8 @@ def features() -> list:
                  ["Break reminder", "after 50 min work, 5 min break", "Settings → Breaks and breathing"],
                  ["Breathing", "every 20 min, 5 breaths (4 in · 2 hold · 6 out)", "Settings"],
                  ["Lunch length", "60 min", "Settings, or the minutes picker"],
-                 ["Walking mode", "on", "Menu or Settings"]], [36, 76, 62])]
+                 ["Walking mode", "on", "Menu or Settings"],
+                 ["Morning brief time", "05:00 (first time at the laptop after it)", "Settings → Weather"]], [36, 76, 62])]
 
     s += [P("7. Quotes (no-smoking)", "h1"),
           P("The “No smoking motivation” list speaks one line every 40 minutes: health facts on lungs, heart, "
@@ -357,7 +394,8 @@ def features() -> list:
             "system tells it; it doesn't keep asking), even if you plug and unplug quickly. Each thing is said "
             "once, not again and again; turn it all off with <b>Laptop alerts</b> in the right-click menu."),
           table([["When", "What it does"],
-                 ["Battery below 15% and 10%", "Looks tired (yawns), red battery icon by its head: “Charger lagao bhai”"],
+                 ["Battery below 15% and 10%", "Sits down worn out, barely moves, no strolls; red battery icon by "
+                  "its head: “Charger lagao bhai” (music still wins until 5%)"],
                  ["Battery below 5%", "Icon blinks, holds up the sign, says it loudly; again every 2 min"],
                  ["Charger plugged in", "Jumps happily, green ⚡ icon: “Aah, energy aa gayi ⚡”"],
                  ["Charger unplugged", "Tells you the battery %"],

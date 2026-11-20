@@ -169,6 +169,7 @@ class LiveSource:
             media_site=m.site if m else None,
             media_tutorial=bool(m and m.tutorial),
             media_title=m.title if m else "",
+            media_channel=m.channel if m else "",
         )
 
     def status(self) -> dict[str, str]:

@@ -52,6 +52,15 @@ class StatusDialog(QDialog):
             media = "nothing playing"
         self._set("Media", media)
         self._set("Mood", b.sm.state.value.replace("_", " "))
+        from .glitch import describe
+
+        s = b.state_now
+        if s is not None and s.media is not None:
+            self._set(
+                "Playing",
+                f"{s.media.kind}: {s.media.title[:50]}" + (f" ({s.media.channel})" if s.media.channel else ""),
+            )
+        self._set("Glitch", describe(b.glitch))
         w, now = b.wellness, time.monotonic()
         if w.mode == "break":
             session = f"break, {int(w.ends - now)} s left (typing for 45 s cancels it)"

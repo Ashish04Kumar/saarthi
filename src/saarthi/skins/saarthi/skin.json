@@ -10,11 +10,16 @@
     },
     "idle.tired": {
       "frames": "idle_tired/*.png",
-      "fps": 8,
+      "fps": 6,
       "loop": true
     },
     "idle.hot": {
       "frames": "idle_hot/*.png",
+      "fps": 10,
+      "loop": true
+    },
+    "idle.music": {
+      "frames": "idle_music/*.png",
       "fps": 10,
       "loop": true
     },

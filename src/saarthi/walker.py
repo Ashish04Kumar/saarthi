@@ -109,6 +109,8 @@ class Walker:
         sm = self.buddy.sm
         if sm.busy or sm.preview is not None or sm.state not in STROLL_STATES:
             return
+        if self.win.variant(State.IDLE) == "tired":
+            return  # sitting down, worn out: no strolls on a dying battery
         org = self.buddy.org
         if self.buddy.wellness.active or org.cards or (org.panel is not None and org.panel.isVisible()):
             return  # don't wander off while something is open next to the buddy
