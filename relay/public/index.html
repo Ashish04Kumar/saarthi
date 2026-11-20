@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0f121a">
+<title>Saarthi · live</title>
+<link rel="icon" href="/skin/idle/000.png">
+<style>
+  :root { color-scheme: dark; --bg: #0f121a; --card: #171b26; --line: #232a3a; --text: #e8ebf2; --dim: #8b93a7;
+          --accent: #ffcf4a; --me: #3a4878; }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body { margin: 0; min-height: 100dvh; background: radial-gradient(120% 60% at 50% 20%, #1c2336, var(--bg) 70%);
+         color: var(--text); font: 15px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif;
+         display: flex; flex-direction: column; align-items: center;
+         padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom); }
+  main { width: min(460px, 100%); padding: 0 16px; display: flex; flex-direction: column; align-items: center; }
+
+  header { margin-top: 18px; text-align: center; }
+  #doing { font-size: 1.05rem; font-weight: 600; }
+  #status { color: var(--dim); font-size: .8rem; margin-top: 2px; }
+  #status .dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: #3ad27a;
+                 margin-right: 5px; vertical-align: 1px; }
+  #status.off .dot { background: #5d6475; }
+
+  #stage { position: relative; margin-top: 18px; width: min(260px, 70vw); aspect-ratio: 1; }
+  canvas { width: 100%; height: 100%; cursor: pointer; touch-action: manipulation; user-select: none; -webkit-user-select: none; }
+  #bubble { position: absolute; left: 50%; bottom: 90%; transform: translateX(-50%); max-width: 240px; width: max-content;
+            background: #fff; color: #1b2440; border-radius: 14px; padding: 8px 12px; font-size: .9rem;
+            box-shadow: 0 4px 14px #0007; opacity: 0; transition: opacity .25s; pointer-events: none; }
+  #bubble.show { opacity: 1; }
+  #bubble::after { content: ""; position: absolute; left: 50%; top: 100%; margin-left: -7px;
+                   border: 7px solid transparent; border-top-color: #fff; }
+
+  #hint { color: var(--dim); font-size: .8rem; margin-top: 4px; text-align: center; }
+
+  #actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px 4px; margin-top: 14px; width: 100%; }
+  #actions button { min-width: 52px; }
+  #actions button { flex: 1; max-width: 60px; background: none; border: 0; color: var(--dim); cursor: pointer;
+                    display: flex; flex-direction: column; align-items: center; gap: 3px; font-size: .68rem; padding: 0; }
+  #actions button span { width: 42px; height: 42px; border-radius: 50%; display: grid; place-items: center; font-size: 1.25rem;
+                         background: var(--card); border: 1px solid var(--line); transition: transform .12s, border-color .12s; }
+  #actions button:hover span { border-color: #3a4462; }
+  #actions button:active span { transform: scale(.9); }
+
+  #chat { width: 100%; margin: 18px 0 16px; background: var(--card); border: 1px solid var(--line); border-radius: 16px;
+          display: flex; flex-direction: column; overflow: hidden; }
+  #msgs { max-height: 34dvh; min-height: 64px; overflow-y: auto; padding: 10px 10px 4px;
+          display: flex; flex-direction: column; gap: 5px; }
+  .msg { max-width: 78%; padding: 6px 10px; border-radius: 14px; word-wrap: break-word; white-space: pre-wrap; font-size: .92rem; }
+  .msg.me { align-self: flex-end; background: var(--me); border-bottom-right-radius: 4px; }
+  .msg.him { align-self: flex-start; background: #232938; border-bottom-left-radius: 4px; }
+  .msg small { display: block; color: #ffffff70; font-size: .66rem; margin-top: 1px; text-align: right; }
+  #msgs .empty { color: var(--dim); text-align: center; font-size: .85rem; margin: auto; }
+  #emojis { display: none; flex-wrap: wrap; padding: 4px 8px; border-top: 1px solid var(--line); }
+  #emojis.open { display: flex; }
+  #emojis button { background: none; border: 0; font-size: 1.3rem; padding: 3px 5px; cursor: pointer; border-radius: 8px; }
+  #chatForm { display: flex; align-items: center; gap: 6px; padding: 8px; border-top: 1px solid var(--line); }
+  #emojiBtn { background: none; border: 0; font-size: 1.3rem; cursor: pointer; padding: 0 4px; opacity: .8; }
+  #chatInput { flex: 1; min-width: 0; background: var(--bg); color: var(--text); border: 1px solid var(--line);
+               border-radius: 20px; padding: 9px 14px; font-size: 1rem; outline: none; }
+  #chatInput:focus { border-color: #3a4462; }
+  #send { width: 38px; height: 38px; flex: none; border-radius: 50%; border: 0; background: var(--accent); color: #1b1b1b;
+          font-size: 1.05rem; cursor: pointer; display: grid; place-items: center; }
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <div id="doing">Connecting…</div>
+    <div id="status" class="off"><span class="dot"></span><span id="statusText">offline</span></div>
+  </header>
+
+  <div id="stage">
+    <div id="bubble"></div>
+    <canvas id="c" width="512" height="512" aria-label="Saarthi character"></canvas>
+  </div>
+  <div id="hint">Tap <span class="who">him</span> — head, belly, jeans or shoes</div>
+
+  <div id="actions">
+    <button data-a="slap" title="Slap"><span>✋</span>Slap</button>
+    <button data-a="ball" title="Football"><span>⚽</span>Ball</button>
+    <button data-a="pillow" title="Pillow"><span>🛏️</span>Pillow</button>
+    <button data-a="hug" title="Hug"><span>🤗</span>Hug</button>
+    <button data-a="love" title="Love"><span>❤️</span>Love</button>
+    <button data-a="kiss" title="Kiss"><span>💋</span>Kiss</button>
+    <button data-a="angry" title="Angry"><span>😤</span>Angry</button>
+  </div>
+
+  <div id="chat">
+    <div id="msgs"><div class="empty">Say hi to <span class="who">him</span> 👋</div></div>
+    <div id="emojis"></div>
+    <form id="chatForm" autocomplete="off">
+      <button type="button" id="emojiBtn" aria-label="Emoji">😊</button>
+      <input id="chatInput" maxlength="500" placeholder="Message…" aria-label="Message">
+      <button type="submit" id="send" aria-label="Send">➤</button>
+    </form>
+  </div>
+</main>
+<script src="/app.js"></script>
+</body>
+</html>

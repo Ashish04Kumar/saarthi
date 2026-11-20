@@ -42,6 +42,13 @@ DEFAULTS: dict[str, Any] = {
     "walk_enabled": True,
     "lunch_minutes": 60,
     "brief_at": "05:00",  # morning brief: the first time you're at the laptop after this time each day
+    # live link (relay/): a web page where someone can watch your Saarthi and play with it
+    "share_enabled": False,  # Couple mode: the link, their pokes/football/hug… here too, and chat
+    "share_url": "",  # the deployed relay, e.g. https://saarthi-live.<you>.workers.dev
+    "share_room": "",  # made once; part of the link
+    "share_token": "",  # made once; secret, proves this laptop owns the room
+    "share_name": "",  # shown on the page: "<name> is watching a video"
+    "share_friend": "",  # who you share it with: "<friend> kicked a football at you"
     "glitch_url": "",  # e.g. http://127.0.0.1:8400: send Saarthi's state (schema.py) to your Glitch
     "laptop_alerts": True,  # battery, charger, heat, internet, headphones, volume, late night
     "developer": False,  # the author's own machine: hides the developer credit

@@ -28,6 +28,7 @@ from engine import (
 SKIN, HAIR, BEARD, SHIRT, PANTS, SHOES, EYE, PUPIL, LIPS, MOUTH = range(1, 11)
 LAPTOP, SCREEN, WHITE, BUCKET, POPCORN, RED, SIGN, WATER, ZZZ, BUTTON = range(11, 21)
 IRIS, FADE, TEA, DIAL, STRAP = 21, 22, 23, 24, 25
+BLUSH, PILLOW = 26, 27
 
 
 @dataclass
@@ -82,6 +83,8 @@ def materials(look: Look) -> dict:
         TEA: Material((0.58, 0.34, 0.18), 0.3),
         DIAL: Material((0.86, 0.88, 0.92), 1.0),
         STRAP: Material((0.10, 0.09, 0.10), 0.4),
+        BLUSH: Material((0.98, 0.45, 0.55), 0.1),
+        PILLOW: Material((0.72, 0.78, 0.98), 0.05),
         FADE: Material(tuple(h * 0.78 + s * 0.22 for h, s in zip(look.hair, look.skin, strict=False)), 0.05),
     }
 
@@ -468,6 +471,55 @@ def props(pose: Pose, J, R):
                 capsule(p, c + V(s * 0.85, 0, 0), c + V(s * 0.85, s * 3.2, 0), s * 0.22))))
         if items:
             out.append(Group(items, hc + V(0.6, 0.45, 0.1), 0.6))
+    if pr.get("ball") is not None:  # a football: white with dark patches
+        bc = V(*pr["ball"])
+        patches = [V(0.0, 0.10, 0.0), V(0.09, 0.0, 0.05), V(-0.09, 0.0, 0.05), V(0.0, -0.09, 0.05), V(0.0, 0.0, 0.11)]
+        out.append(Group([
+            Part(WHITE, lambda p: sphere(p, bc, 0.11)),
+            Part(PUPIL, lambda p: np.minimum.reduce([sphere(p, bc + d * 0.93, 0.035) for d in patches])),
+        ], bc, 0.14))
+    if pr.get("pillow") is not None:
+        pc = V(*pr["pillow"])
+        out.append(Part(PILLOW, lambda p: box(p, pc, V(0.20, 0.13, 0.06), 0.06)))
+    if pr.get("blush"):
+        cheeks = [hc + R @ V(sx * 0.24, -0.09, 0.33) for sx in (-1, 1)]
+        out.append(Part(BLUSH, lambda p: np.minimum.reduce(
+            [ellipsoid((p - c) @ R, V(0, 0, 0), V(0.075, 0.04, 0.025)) for c in cheeks])))
+    if pr.get("lips") is not None:  # a flying kiss: a pair of red lips
+        lc, sz = V(*pr["lips"][0]), pr["lips"][1]
+        out.append(Group([Part(RED, lambda p: smin(
+            ellipsoid(p, lc + V(0, 0.018 * sz, 0), V(0.075 * sz, 0.024 * sz, 0.025 * sz)),
+            ellipsoid(p, lc + V(0, -0.018 * sz, 0), V(0.068 * sz, 0.026 * sz, 0.025 * sz)), 0.01))], lc, 0.15 * sz))
+    if pr.get("kiss_mark"):  # lipstick mark left on his cheek
+        mc = hc + R @ V(0.25, 0.0, 0.32)
+        out.append(Part(RED, lambda p: smin(
+            ellipsoid((p - mc) @ R, V(0, 0.016, 0), V(0.065, 0.02, 0.014)),
+            ellipsoid((p - mc) @ R, V(0, -0.016, 0), V(0.058, 0.022, 0.014)), 0.008)))
+    if pr.get("anger") is not None:  # the red "anger mark" (four bent strokes), pulsing
+        k = pr["anger"]
+        ac = hc + V(0.42, 0.42, 0.12)
+        s = 0.09 * (1.0 + 0.25 * k)
+        strokes = []
+        for sx, sy in ((-1, -1), (1, -1), (-1, 1), (1, 1)):
+            a = ac + V(sx * s * 0.35, sy * s * 1.0, 0)
+            b = ac + V(sx * s * 0.35, sy * s * 0.35, 0)
+            c = ac + V(sx * s * 1.0, sy * s * 0.35, 0)
+            strokes += [(a, b), (b, c)]
+        out.append(Part(RED, lambda p: np.minimum.reduce([capsule(p, a, b, 0.018 * (1 + 0.25 * k)) for a, b in strokes])))
+    if pr.get("hearts") is not None:
+        k = pr["hearts"]
+        items = []
+        for i in range(3):
+            kk = (k + i / 3) % 1.0
+            if kk > 0.9:
+                continue
+            c = hc + V((-0.45, 0.5, 0.05)[i] + 0.05 * math.sin(kk * 7 + i), 0.15 + 0.6 * kk, 0.15)
+            s = 0.07 + 0.02 * i
+            items.append(Part(RED, lambda p, c=c, s=s: smin(
+                smin(sphere(p, c + V(-s * 0.5, s * 0.3, 0), s * 0.6), sphere(p, c + V(s * 0.5, s * 0.3, 0), s * 0.6), 0.02),
+                capsule(p, c + V(0, s * 0.1, 0), c + V(0, -s * 0.9, 0), s * 0.62, s * 0.06), 0.03)))
+        if items:
+            out.append(Group(items, hc + V(0, 0.5, 0.1), 0.9))
     if pr.get("sweat") is not None:
         k = pr["sweat"]
         c = hc + R @ V(0.37, 0.20 - 0.25 * k, 0.12)

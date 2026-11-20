@@ -138,8 +138,39 @@ class SettingsTab(QScrollArea):
         lay.addWidget(self._wellness_box())
         lay.addWidget(self._weather_box())
         lay.addWidget(self._commute_box())
+        lay.addWidget(self._share_box())
         lay.addWidget(_gray("Settings save automatically. API keys stay on this computer in config.json."))
         lay.addStretch(1)
+
+    # ---------------- live link ----------------
+    def _share_box(self) -> QGroupBox:
+        from . import share as sh
+
+        cfg, share = self.cfg, self.buddy.share
+        box = QGroupBox("Couple mode (someone can watch your Saarthi, play with it and chat)")
+        f = QFormLayout(box)
+        url = QLineEdit(cfg["share_url"], placeholderText="https://saarthi-live.<you>.workers.dev")
+        url.editingFinished.connect(lambda: cfg.__setitem__("share_url", url.text().strip()))
+        f.addRow("Relay address", url)
+        on = QCheckBox("💑 Couple mode: the link, their pokes / football / hug / kiss here too, and chat")
+        on.setChecked(share.enabled)
+        on.toggled.connect(share.set_enabled)
+        f.addRow(on)
+        me = QLineEdit(cfg["share_name"], placeholderText="Your name on the page")
+        me.editingFinished.connect(lambda: cfg.__setitem__("share_name", me.text().strip()))
+        f.addRow("My name", me)
+        friend = QLineEdit(cfg["share_friend"], placeholderText="Who you share it with")
+        friend.editingFinished.connect(lambda: cfg.__setitem__("share_friend", friend.text().strip()))
+        f.addRow("Their name", friend)
+        link = QLineEdit(sh.link(cfg), readOnly=True, placeholderText="Set the relay address first")
+        f.addRow("Link", link)
+        f.addRow(
+            _gray(
+                "They see your character, a general 'what he's doing' (no titles), chat and the fun lines. "
+                "Never your reminders, notes, calendar, weather or traffic."
+            )
+        )
+        return box
 
     # ---------------- look ----------------
     def _look_box(self) -> QGroupBox:

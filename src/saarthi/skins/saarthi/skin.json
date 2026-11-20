@@ -118,6 +118,41 @@
       "fps": 10,
       "loop": false
     },
+    "poked.slap": {
+      "frames": "poked_slap/*.png",
+      "fps": 10,
+      "loop": false
+    },
+    "poked.ball": {
+      "frames": "poked_ball/*.png",
+      "fps": 10,
+      "loop": false
+    },
+    "poked.pillow": {
+      "frames": "poked_pillow/*.png",
+      "fps": 10,
+      "loop": false
+    },
+    "poked.love": {
+      "frames": "poked_love/*.png",
+      "fps": 8,
+      "loop": false
+    },
+    "poked.kiss": {
+      "frames": "poked_kiss/*.png",
+      "fps": 8,
+      "loop": false
+    },
+    "poked.hug": {
+      "frames": "poked_hug/*.png",
+      "fps": 8,
+      "loop": false
+    },
+    "poked.angry": {
+      "frames": "poked_angry/*.png",
+      "fps": 8,
+      "loop": false
+    },
     "giggle": {
       "frames": "giggle/*.png",
       "fps": 12,

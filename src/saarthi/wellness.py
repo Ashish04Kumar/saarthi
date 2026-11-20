@@ -53,7 +53,7 @@ class Wellness:
     def _show(self, text: str):
         if text != self._last_text or not self.buddy.bubble.isVisible():
             self._last_text = text
-            self.buddy.say(text, 2500, force=True)
+            self.buddy.say_shared(text, 2500, force=True)
 
     # ---------- loop ----------
     def tick(self):
@@ -82,7 +82,7 @@ class Wellness:
             a = getattr(self.buddy, "activity", None)
             if a is not None and a.keys_per_sec > 1.5 and now - self.last_nag > 60:
                 self.last_nag = now
-                self.buddy.say(self._line("break_nag"), 3000, force=True)
+                self.buddy.say_shared(self._line("break_nag"), 3000, force=True)
                 return
             if now - self.last_nag > 4:
                 self._show(f"☕ Break  {mmss(left)}")
@@ -117,7 +117,7 @@ class Wellness:
         work, brk = int(self.cfg["work_minutes"]), int(self.cfg["break_minutes"])
         hinglish = self.cfg["language"] == "hinglish"
         text = self._line("break_offer", work=work, brk=brk)
-        self.buddy.say(text, 6000, force=True)
+        self.buddy.say_shared(text, 6000, force=True)
 
         def later():
             self.offer_open = False
@@ -146,7 +146,7 @@ class Wellness:
         self.streak.reset()
         self.buddy.sm.trigger(State.BREAK, now, dur + 1)
         self.buddy.win.set_state(State.BREAK, now)
-        self.buddy.say(self._line("break_start", brk=int(round(dur / 60))), 4000, force=True)
+        self.buddy.say_shared(self._line("break_start", brk=int(round(dur / 60))), 4000, force=True)
         self.last_nag = now  # let the start line stay up for a moment
         self.buddy.walker.start_pacing()
 
@@ -177,7 +177,7 @@ class Wellness:
         self.lunch_asked = False
         self.buddy.sm.trigger(State.EAT, now, dur + 1)
         self.buddy.win.set_state(State.EAT, now)
-        self.buddy.say(self._line("lunch_start"), 4000, force=True)
+        self.buddy.say_shared(self._line("lunch_start"), 4000, force=True)
         self.last_nag = now
 
     def _lunch_tick(self, now: float):
@@ -195,7 +195,7 @@ class Wellness:
         """Done eating: slow walks with little thinking stops in between."""
         self.buddy.sm.trigger(State.THINK, now, self.ends - now + 1)
         self.buddy.win.set_state(State.THINK, now)
-        self.buddy.say(self._line("lunch_walk"), 4000, force=True)
+        self.buddy.say_shared(self._line("lunch_walk"), 4000, force=True)
         self.last_nag = now
         self.buddy.walker.start_pacing(factor=0.55, pause=(15, 30), on_pause=self._think_out_loud)
 
@@ -204,7 +204,7 @@ class Wellness:
             return
         now = time.monotonic()
         self.buddy.win.set_state(State.THINK, now)
-        self.buddy.say(self._line("think"), 4500, force=True)
+        self.buddy.say_shared(self._line("think"), 4500, force=True)
         self.last_nag = now  # keep the thought up before the countdown returns
 
     def set_remaining(self, minutes: float):
@@ -249,7 +249,7 @@ class Wellness:
         self.buddy.org.store.meta["last_lunch"] = datetime.now().date().isoformat()
         self.buddy.sm.trigger(State.HAPPY, now)
         self.buddy.win.set_state(State.HAPPY, now)
-        self.buddy.say(self._line("lunch_end"), 5000, force=True)
+        self.buddy.say_shared(self._line("lunch_end"), 5000, force=True)
 
     def skip_break(self):
         """You kept typing through the break: it's important, so cancel and ask again later."""
@@ -259,7 +259,7 @@ class Wellness:
         now = time.monotonic()
         self.buddy.sm.end_transient(now)
         self.break_snooze = now + BREAK_SNOOZE_MIN * 60  # active time is NOT reset
-        self.buddy.say(self._line("break_skip", snooze=BREAK_SNOOZE_MIN), 6000, force=True)
+        self.buddy.say_shared(self._line("break_skip", snooze=BREAK_SNOOZE_MIN), 6000, force=True)
 
     def skip_breathe(self):
         self.mode = None
@@ -267,7 +267,7 @@ class Wellness:
         now = time.monotonic()
         self.buddy.sm.end_transient(now)
         self.next_breath = now + 30 * 60
-        self.buddy.say(self._line("breathe_skip"), 4000, force=True)
+        self.buddy.say_shared(self._line("breathe_skip"), 4000, force=True)
 
     def end_break(self):
         self.mode = None
@@ -278,14 +278,14 @@ class Wellness:
         self.break_snooze = None
         self.buddy.sm.trigger(State.HAPPY, now)
         self.buddy.win.set_state(State.HAPPY, now)
-        self.buddy.say(self._line("break_end"), 5000, force=True)
+        self.buddy.say_shared(self._line("break_end"), 5000, force=True)
 
     # ---------- breathing ----------
     def offer_breathe(self):
         self.offer_open = True
         hinglish = self.cfg["language"] == "hinglish"
         text = self._line("breathe_offer")
-        self.buddy.say(text, 6000, force=True)
+        self.buddy.say_shared(text, 6000, force=True)
 
         def later():
             self.offer_open = False
@@ -323,7 +323,7 @@ class Wellness:
         self.buddy.sm.end_transient(now)
         self.buddy.sm.trigger(State.HAPPY, now)
         self.buddy.win.set_state(State.HAPPY, now)
-        self.buddy.say(self._line("breathe_end"), 5000, force=True)
+        self.buddy.say_shared(self._line("breathe_end"), 5000, force=True)
 
     def stop(self, quiet: bool = False):
         """End whatever session is running (menu: End break / breathing)."""

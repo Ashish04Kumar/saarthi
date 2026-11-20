@@ -36,6 +36,14 @@ STATES = {
     "poked": (16, 10, False),
     "poked.boots": (16, 10, False),  # clicked on the shoes: hops, holding the sore foot
     "poked.jeans": (16, 10, False),  # clicked on the jeans: brushes them off, hands on hips
+    # from the shared live link: what a visitor did
+    "poked.slap": (16, 10, False),  # head snaps to the side, hand on the cheek
+    "poked.ball": (18, 10, False),  # a football bonks his head and bounces away
+    "poked.pillow": (18, 10, False),  # a pillow hits him in the face, he wobbles and laughs
+    "poked.love": (24, 8, False),  # hearts float up, he blushes and smiles shyly
+    "poked.hug": (24, 8, False),  # opens his arms, then hugs himself tight, eyes closed, happy
+    "poked.angry": (24, 8, False),  # she's angry: anger mark, he shrinks, hands together "sorry"
+    "poked.kiss": (24, 8, False),  # a pair of lips flies to his cheek, leaves a mark; he melts
     "giggle": (12, 12, True),
     "break": (24, 6, True),
     "breathe": (48, 4, True),  # 12 s = one breath (in 4, hold 2, out 6)
@@ -414,6 +422,117 @@ def pose_for(state: str, t: float) -> Pose:
                 setattr(p, f"wr_{side}", (sx * 0.30, 0.66, 0.06))
             p.head_rot, p.look = (-0.06, 0.2, 0.06), (0.5, 0.0)
             p.brows, p.mouth, p.eyes = "determined", "small", "half"
+        return p
+
+    if state == "poked.slap":
+        k = math.exp(-2.5 * t) * (1.0 if t > 0.15 else t / 0.15)
+        p = stand()
+        p.offset = (-0.03 * k, 0, 0)
+        p.head_rot = (0.05, -0.55 * k, -0.18 * k)
+        p.el_b, p.wr_b = (0.46, 1.10, 0.14), (0.26, 1.42, 0.30)  # hand on the cheek
+        p.props["blush"] = True
+        p.eyes = "closed" if t < 0.6 else "wide"
+        p.brows, p.mouth = ("determined", "o") if t < 0.9 else ("raised", "small")
+        return p
+
+    if state == "poked.ball":
+        p = stand()
+        hit = 0.4
+        if t < hit:  # flying in from the right
+            u = t / hit
+            p.props["ball"] = (1.5 - 1.1 * u, 2.1 - 0.5 * u + 0.25 * math.sin(math.pi * u), 0.5 - 0.3 * u)
+        elif t < 1.1:  # bounces off, up and away
+            u = (t - hit) / 0.7
+            p.props["ball"] = (0.40 + 1.2 * u, 1.75 + 0.9 * u - 1.2 * u * u, 0.2 + 0.2 * u)
+        k = math.exp(-3.0 * max(0.0, t - hit)) if t >= hit else 0.0
+        p.head_rot = (-0.25 * k, 0.15 * k, -0.30 * k)
+        p.offset = (-0.04 * k, 0, 0)
+        if t > hit + 0.3:  # rub the sore spot
+            rub = 0.03 * math.sin(t * 20)
+            p.el_b, p.wr_b = (0.50, 1.28, 0.08), (0.34 + rub, 1.80, 0.10)
+        p.eyes = "closed" if hit <= t < hit + 0.6 else ("wide" if t < hit else "half")
+        p.brows, p.mouth = ("raised", "o") if t < hit + 0.6 else ("determined", "flat")
+        return p
+
+    if state == "poked.pillow":
+        p = stand()
+        hit = 0.35
+        if t < hit:
+            u = t / hit
+            p.props["pillow"] = (0.9 - 0.9 * u, 1.55, 1.2 - 0.75 * u)
+        elif t < 0.75:
+            u = (t - hit) / 0.4
+            p.props["pillow"] = (0.05 * u, 1.55 - 1.2 * u, 0.45 + 0.1 * u)  # drops to the floor
+        k = math.exp(-2.5 * max(0.0, t - hit)) * math.cos(9 * max(0.0, t - hit)) if t >= hit else 0.0
+        p.offset = (0.0, 0, -0.06 * abs(k))
+        p.head_rot = (-0.20 * k, 0, 0.12 * k)
+        laugh = t > 1.0
+        for side, sx in (("a", -1), ("b", 1)):
+            setattr(p, f"el_{side}", (sx * 0.46, 0.92, 0.06))
+            setattr(p, f"wr_{side}", (sx * 0.52 if not laugh else sx * 0.20, 0.80 if not laugh else 0.66, 0.12))
+        p.eyes = "closed" if t < 1.0 else "happy"
+        p.brows, p.mouth = ("raised", "o") if not laugh else ("neutral", "open")
+        return p
+
+    if state == "poked.kiss":
+        hit = 0.7
+        p = stand(0.01 * math.sin(t * 3))
+        if t < hit:  # lips fly in from the front right, growing
+            u = t / hit
+            p.props["lips"] = ((1.2 - 0.9 * u, 1.9 - 0.4 * u, 1.0 - 0.58 * u), 2.8 - 1.4 * u)
+            p.eyes, p.mouth, p.brows = "wide", "o", "raised"
+        else:  # mark stays, he melts: blush, hearts, dreamy sway
+            k = t - hit
+            p.props.update(kiss_mark=True, blush=True, hearts=(k / 2.3) % 1.0)
+            p.head_rot = (0.10, 0.25 + 0.05 * math.sin(k * 4), 0.20)
+            for side, sx in (("a", -1), ("b", 1)):  # both hands on the heart
+                setattr(p, f"el_{side}", (sx * 0.34, 0.88, 0.22))
+                setattr(p, f"wr_{side}", (sx * 0.06 + 0.06, 1.02, 0.32))
+            p.eyes = "happy"
+            p.brows, p.mouth = "raised", "smile"
+        return p
+
+    if state == "poked.hug":
+        p = stand(0.01 * math.sin(t * 3))
+        if t < 0.6:  # arms open wide
+            u = t / 0.6
+            for side, sx in (("a", -1), ("b", 1)):
+                setattr(p, f"el_{side}", (sx * (0.45 + 0.20 * u), 0.95 + 0.10 * u, 0.10))
+                setattr(p, f"wr_{side}", (sx * (0.50 + 0.35 * u), 1.00 + 0.20 * u, 0.20))
+            p.eyes, p.mouth, p.brows = "wide", "grin", "raised"
+        else:  # squeeze: arms wrapped around, rocking side to side
+            rock = math.sin((t - 0.6) * 5)
+            p.offset = (0.02 * rock, 0, 0)
+            p.el_a, p.wr_a = (-0.36, 0.94, 0.30), (0.22, 1.02, 0.30)
+            p.el_b, p.wr_b = (0.36, 0.90, 0.32), (-0.20, 0.96, 0.30)
+            p.head_rot = (0.10, 0, 0.12 * rock)
+            p.props["blush"] = True
+            p.eyes, p.mouth, p.brows = "happy", "smile", "raised"
+        return p
+
+    if state == "poked.angry":
+        shrink = min(1.0, t / 0.5)
+        p = stand(-0.05 * shrink)
+        p.head = add(p.head, dz=0.04 * shrink)
+        p.props["anger"] = 0.5 + 0.5 * math.sin(t * 9)
+        p.props["sweat"] = (t * 0.6) % 1.0
+        bow = 0.10 * math.sin(t * 6) if t > 0.6 else 0.0  # "sorry, sorry"
+        for side, sx in (("a", -1), ("b", 1)):  # hands pressed together under the chin
+            setattr(p, f"el_{side}", (sx * 0.30, 0.86, 0.24))
+            setattr(p, f"wr_{side}", (sx * 0.03, 1.12 + 0.03 * bow, 0.38))
+        p.head_rot = (0.22 + bow, 0, 0)
+        p.eyes, p.brows, p.mouth = "half", "sleepy", "small"
+        return p
+
+    if state == "poked.love":
+        p = stand(0.01 * math.sin(t * 3))
+        p.props.update(hearts=(t / 3.0) % 1.0, blush=True)
+        for side, sx in (("a", -1), ("b", 1)):  # hands together at the chest, a bit shy
+            setattr(p, f"el_{side}", (sx * 0.30, 0.86, 0.22))
+            setattr(p, f"wr_{side}", (sx * 0.05, 0.98, 0.34))
+        p.head_rot = (0.12, 0.10, 0.18)
+        p.look = (0.5, -0.4)
+        p.eyes, p.brows, p.mouth = "happy", "raised", "smile"
         return p
 
     if state == "poked":

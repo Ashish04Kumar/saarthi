@@ -34,3 +34,7 @@ Thumbs.db
 # Personal data never belongs here: your notes, reminders, settings and custom
 # skins live in your config folder (~/.config/saarthi, %APPDATA%\Saarthi, ...).
 
+# Live relay (Cloudflare): dependencies, local state, copied skin
+relay/node_modules/
+relay/.wrangler/
+relay/public/skin/
