@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-import time
-
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import QDialog, QFormLayout, QLabel, QVBoxLayout
+
+from . import clock
 
 
 class StatusDialog(QDialog):
@@ -38,7 +38,7 @@ class StatusDialog(QDialog):
         b = self.buddy
         for k, v in b.source.status().items():
             self._set(k, v)
-        a = b.source.read(time.monotonic())
+        a = b.source.read(clock.now())
         self._set("Keys / sec", f"{a.keys_per_sec:.1f}")
         self._set("Scrolls / sec", f"{a.scrolls_per_sec:.1f}")
         self._set("Idle", f"{a.idle_seconds:.0f} s")
@@ -61,7 +61,7 @@ class StatusDialog(QDialog):
                 f"{s.media.kind}: {s.media.title[:50]}" + (f" ({s.media.channel})" if s.media.channel else ""),
             )
         self._set("Glitch", describe(b.glitch))
-        w, now = b.wellness, time.monotonic()
+        w, now = b.wellness, clock.now()
         if w.mode == "break":
             session = f"break, {int(w.ends - now)} s left (typing for 45 s cancels it)"
         elif w.mode == "lunch":

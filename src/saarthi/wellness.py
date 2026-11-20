@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 import random
-import time
 from datetime import datetime
 
 from PySide6.QtCore import QTimer
 
+from . import clock
 from .lines import line_for
 from .states import State
 from .wellness_logic import CYCLE, TypingStreak, break_due, breath_phase, mmss
@@ -32,8 +32,8 @@ class Wellness:
         self.last_nag = 0.0
         self._last_text = ""
         self.streak = TypingStreak()
-        self._last_tick = time.monotonic()
-        self.next_breath = time.monotonic() + self._breath_gap()
+        self._last_tick = clock.now()
+        self.next_breath = clock.now() + self._breath_gap()
         self.timer = QTimer(timeout=self.tick)
         self.timer.start(500)
 
@@ -57,7 +57,7 @@ class Wellness:
 
     # ---------- loop ----------
     def tick(self):
-        now = time.monotonic()
+        now = clock.now()
         dt, self._last_tick = now - self._last_tick, now
         sm = self.buddy.sm
         if self.mode is not None:
@@ -121,7 +121,7 @@ class Wellness:
 
         def later():
             self.offer_open = False
-            self.break_snooze = time.monotonic() + 10 * 60
+            self.break_snooze = clock.now() + 10 * 60
 
         self.buddy.org._card(
             "☕",
@@ -140,7 +140,7 @@ class Wellness:
 
     def start_break(self, minutes: float | None = None):
         self.stop(quiet=True)
-        now = time.monotonic()
+        now = clock.now()
         dur = 60 * float(minutes or self.cfg["break_minutes"])
         self.mode, self.started, self.ends = "break", now, now + dur
         self.streak.reset()
@@ -169,7 +169,7 @@ class Wellness:
     def start_lunch(self, minutes: float | None = None):
         self.stop(quiet=True)
         self.buddy.walker.cancel()
-        now = time.monotonic()
+        now = clock.now()
         dur = 60 * float(minutes or self.cfg["lunch_minutes"])
         self.mode, self.started, self.ends = "lunch", now, now + dur
         self.eat_until = now + min(dur * 0.6, random.uniform(10, 15) * 60)  # eat first, then stroll
@@ -202,7 +202,7 @@ class Wellness:
     def _think_out_loud(self):
         if self.mode != "lunch":
             return
-        now = time.monotonic()
+        now = clock.now()
         self.buddy.win.set_state(State.THINK, now)
         self.buddy.say(self._line("think"), 4500, force=True)
         self.last_nag = now  # keep the thought up before the countdown returns
@@ -211,7 +211,7 @@ class Wellness:
         """Change how long the running break/lunch has left."""
         if self.mode not in ("break", "lunch"):
             return
-        now = time.monotonic()
+        now = clock.now()
         self.ends = now + 60 * float(minutes)
         if self.mode == "lunch":
             self.eat_until = min(self.eat_until, self.ends)
@@ -242,7 +242,7 @@ class Wellness:
             return
         self.mode = None
         self.buddy.walker.stop_pacing()
-        now = time.monotonic()
+        now = clock.now()
         self.buddy.sm.end_transient(now)
         self.buddy.sm.reset_active()  # lunch counts as a real break
         self.break_snooze = None
@@ -256,7 +256,7 @@ class Wellness:
         self.mode = None
         self.streak.reset()
         self.buddy.walker.stop_pacing()
-        now = time.monotonic()
+        now = clock.now()
         self.buddy.sm.end_transient(now)
         self.break_snooze = now + BREAK_SNOOZE_MIN * 60  # active time is NOT reset
         self.buddy.say(self._line("break_skip", snooze=BREAK_SNOOZE_MIN), 6000, force=True)
@@ -264,7 +264,7 @@ class Wellness:
     def skip_breathe(self):
         self.mode = None
         self.streak.reset()
-        now = time.monotonic()
+        now = clock.now()
         self.buddy.sm.end_transient(now)
         self.next_breath = now + 30 * 60
         self.buddy.say(self._line("breathe_skip"), 4000, force=True)
@@ -272,7 +272,7 @@ class Wellness:
     def end_break(self):
         self.mode = None
         self.buddy.walker.stop_pacing()
-        now = time.monotonic()
+        now = clock.now()
         self.buddy.sm.end_transient(now)
         self.buddy.sm.reset_active()
         self.break_snooze = None
@@ -289,7 +289,7 @@ class Wellness:
 
         def later():
             self.offer_open = False
-            self.next_breath = time.monotonic() + 30 * 60
+            self.next_breath = clock.now() + 30 * 60
 
         self.buddy.org._card(
             "🧘",
@@ -309,7 +309,7 @@ class Wellness:
     def start_breathe(self):
         self.stop(quiet=True)
         self.buddy.walker.cancel()  # stand still to breathe
-        now = time.monotonic()
+        now = clock.now()
         dur = CYCLE * int(self.cfg["breathing_cycles"])
         self.mode, self.started, self.ends = "breathe", now, now + dur
         self.streak.reset()
@@ -318,7 +318,7 @@ class Wellness:
 
     def end_breathe(self):
         self.mode = None
-        now = time.monotonic()
+        now = clock.now()
         self.next_breath = now + self._breath_gap()
         self.buddy.sm.end_transient(now)
         self.buddy.sm.trigger(State.HAPPY, now)
@@ -333,7 +333,7 @@ class Wellness:
             if self.mode in ("break", "lunch"):
                 self.buddy.walker.stop_pacing()
             self.mode = None
-            self.buddy.sm.end_transient(time.monotonic())
+            self.buddy.sm.end_transient(clock.now())
         elif self.mode == "break":
             self.end_break()
         elif self.mode == "lunch":

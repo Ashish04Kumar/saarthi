@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 import math
-import time
 
 from PySide6.QtCore import QPoint, QRect, QRectF, Qt, QTimer, Signal
 from PySide6.QtGui import QBitmap, QImage, QPainter, QRegion
 from PySide6.QtWidgets import QApplication, QWidget
 
+from . import clock
 from .skin import Skin
 from .states import State
 from .wellness_logic import breath_phase
@@ -40,7 +40,7 @@ class BuddyWindow(QWidget):
         self.setWindowTitle("Saarthi")
         self.skin = skin
         self.state = State.IDLE
-        self.state_started = time.monotonic()
+        self.state_started = clock.now()
         self.override: State | None = None  # e.g. WALK while the walker moves us
         self.override_started = 0.0
         self.override_speed = 1.0  # animation speed for the override (slow strolls)
@@ -53,7 +53,7 @@ class BuddyWindow(QWidget):
         self._mask_at = 0.0
         self._body = QRect()  # where the character's pixels are (widget coords)
         self.mirror = False
-        self.t0 = time.monotonic()
+        self.t0 = clock.now()
         self.credit = credit  # developer credit shown under the character (None = hidden)
         self.set_size(size)
         self._press: QPoint | None = None
@@ -67,7 +67,7 @@ class BuddyWindow(QWidget):
         self._single = QTimer(self, singleShot=True, timeout=lambda: self.clicked.emit(self._click_part))
 
     def squash(self) -> None:
-        self._squash_at = time.monotonic()
+        self._squash_at = clock.now()
 
     def _body_scale(self, now: float) -> tuple[float, float]:
         sx = sy = 1.0
@@ -99,7 +99,7 @@ class BuddyWindow(QWidget):
 
     def set_override(self, state: State | None, mirror: bool = False, speed: float = 1.0) -> None:
         if state != self.override:
-            self.override_started = time.monotonic()
+            self.override_started = clock.now()
         self.override, self.mirror, self.override_speed = state, mirror, speed
 
     def set_state(self, state: State, started: float) -> None:
@@ -112,7 +112,7 @@ class BuddyWindow(QWidget):
         if variant is None:
             self.takes.pop(state, None)
         elif self.variant(state) != variant:
-            self.takes[state] = (variant, time.monotonic())
+            self.takes[state] = (variant, clock.now())
 
     def variant(self, state: State) -> str | None:
         take = self.takes.get(state)
@@ -127,7 +127,7 @@ class BuddyWindow(QWidget):
         return r.translated(self.frameGeometry().topLeft())
 
     def paintEvent(self, _):
-        now = time.monotonic()
+        now = clock.now()
         dpr = self.devicePixelRatioF()
         img = QImage(round(self.width() * dpr), round(self.height() * dpr), QImage.Format.Format_ARGB32_Premultiplied)
         img.setDevicePixelRatio(dpr)

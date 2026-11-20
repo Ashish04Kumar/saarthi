@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 import threading
-import time
 from collections.abc import Callable
 from datetime import datetime, timedelta
 from typing import Any
 
 from PySide6.QtCore import QObject, QTimer, Signal
 
+from . import clock
 from . import commute as cm
 from .weather import Place, Weather, accessory, fetch_weather, locate_by_ip, summary
 
@@ -49,7 +49,7 @@ class Outdoor:
         self._fetching = False
         self._rain_warned_at: datetime | None = None
         self._commute_busy = False
-        self.started = time.monotonic()
+        self.started = clock.now()
 
         self.weather_timer = QTimer(timeout=self.refresh_weather)
         self.weather_timer.start(WEATHER_EVERY_MS)
@@ -148,7 +148,7 @@ class Outdoor:
             self.cfg["weather_enabled"]
             and self.weather is None
             and not self.weather_error
-            and time.monotonic() - self.started < 25
+            and clock.now() - self.started < 25
         )
 
     # ---------------- commute ----------------
