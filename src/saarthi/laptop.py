@@ -22,6 +22,8 @@ import time
 from collections import deque
 from dataclasses import dataclass, field
 
+from . import clock
+
 BATTERY_LEVELS = (15, 10)  # warn once when it drops below each of these
 BATTERY_CRITICAL = 5  # below this: loud, and again every CRITICAL_REPEAT seconds
 CRITICAL_REPEAT = 120.0
@@ -296,7 +298,7 @@ class LaptopProbe(threading.Thread):
             threading.Thread(target=self._pactl_loop, name="saarthi-pactl", daemon=True).start()
         next_full = next_audio = 0.0
         while not self._quit.is_set():
-            now = time.monotonic()
+            now = clock.now()
             with contextlib.suppress(Exception):  # a broken sensor must never kill the thread
                 changed = self.read_power(psutil)
                 changed |= self.watch_net(psutil)
@@ -313,11 +315,11 @@ class LaptopProbe(threading.Thread):
                     changed = True
                 if changed:
                     self.on_change()
-            wait = next_full - time.monotonic()
+            wait = next_full - clock.now()
             if not self.events:
                 wait = min(wait, self.poll)
             if self._link and not self._checking:
-                wait = min(wait, self._net_at - time.monotonic())
+                wait = min(wait, self._net_at - clock.now())
             self._kick.wait(max(0.05, wait))
             self._kick.clear()
 
@@ -416,7 +418,7 @@ class LaptopProbe(threading.Thread):
     def watch_net(self, psutil) -> None:
         """Wi-Fi drops are seen at once (no route); after it reconnects we keep asking the internet
         every 2 s until it answers, then every net_every s."""
-        now = time.monotonic()
+        now = clock.now()
         link = has_link(psutil)
         changed = False
         if link != self._link:
@@ -435,7 +437,7 @@ class LaptopProbe(threading.Thread):
     def _check_net(self) -> None:
         try:
             ok = online()
-            now = time.monotonic()
+            now = clock.now()
             if ok:
                 self._fails = 0
                 if self._set_net(True):

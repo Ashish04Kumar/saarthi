@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 import random
-import time
 
 from PySide6.QtCore import QPoint, QRectF, Qt, QTimer
 from PySide6.QtGui import QAction, QActionGroup, QIcon, QPainter, QPixmap
 from PySide6.QtWidgets import QApplication, QMenu, QSystemTrayIcon
 
+from . import clock
 from . import skin as skins
 from .activity import DemoSource, LiveSource, NullSource
 from .bubble import Bubble
@@ -127,7 +127,7 @@ class Saarthi:
 
     # ---------- loop ----------
     def tick(self):
-        now = time.monotonic()
+        now = clock.now()
         before = self.sm.state
         activity = self.source.read(now)
         if self._sim is not None:
@@ -240,7 +240,7 @@ class Saarthi:
             self._shareable.discard(text)
             if getattr(self, "share", None) is not None:
                 self.share.say(text)
-        self.last_line_at = time.monotonic()
+        self.last_line_at = clock.now()
         self._bubble_prio = prio
         self.bubble.say(text, self.win.body_rect(), self.screen_rect(), ms)
 
@@ -267,7 +267,7 @@ class Saarthi:
         or annoy it by clicking a lot."""
         if self.quiet:
             return  # stays still while you share your screen
-        now = time.monotonic()
+        now = clock.now()
         self.win.squash()
         lang = self.cfg["language"]
         if self.wellness.active:
@@ -322,7 +322,7 @@ class Saarthi:
             return
         from .duration_dialog import DurationDialog
 
-        left = max(1, round((w.ends - time.monotonic()) / 60))
+        left = max(1, round((w.ends - clock.now()) / 60))
         answer = DurationDialog.ask(w.mode, left, editing=True)
         if answer is not None:
             w.set_remaining(answer[0])
@@ -385,7 +385,7 @@ class Saarthi:
     def alert(self):
         if self.quiet:
             return
-        now = time.monotonic()
+        now = clock.now()
         if self.sm.preview is None and not self.sm.busy:
             self.sm.trigger(State.ALERT, now)
             self.win.set_state(State.ALERT, now)
@@ -553,7 +553,7 @@ class Saarthi:
     def simulate(self, activity, seconds: float = 10):
         """Pretend you're doing something for a few seconds."""
         self.sm.preview = None
-        self._sim = (activity, time.monotonic() + seconds)
+        self._sim = (activity, clock.now() + seconds)
 
     def build_try_menu(self, t: QMenu):
         from datetime import datetime, timedelta
@@ -645,7 +645,7 @@ class Saarthi:
     def set_preview(self, state: State | None):
         self.walker.cancel()
         self.sm.preview = state
-        now = time.monotonic()
+        now = clock.now()
         if state is not None:
             self.win.set_state(state, now)
             self.win.state_started = now
@@ -653,7 +653,7 @@ class Saarthi:
     @staticmethod
     def make_source(demo: bool):
         if demo:
-            return DemoSource(time.monotonic())
+            return DemoSource(clock.now())
         try:
             return LiveSource()
         except Exception as e:  # never let detection crash the buddy

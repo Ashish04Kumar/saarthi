@@ -6,8 +6,8 @@ import contextlib
 import os
 import sys
 import threading
-import time
 
+from .. import clock
 from ..states import Activity
 from .counters import RateCounter
 from .demo import DemoSource, NullSource
@@ -49,7 +49,7 @@ class LiveSource:
 
         self.input = self._start_input()
         self._idle = 0.0
-        self._idle_at = time.monotonic()
+        self._idle_at = clock.now()
         self._has_idle = False
         self.media: MediaInfo | None = None
         self.window_title = ""
@@ -61,7 +61,7 @@ class LiveSource:
 
     # ---------- input ----------
     def _touched(self) -> None:
-        self.last_input = time.monotonic()
+        self.last_input = clock.now()
 
     def _start_input(self):
         # On Wayland pynput is a partial fallback: it only sees XWayland apps.
@@ -124,7 +124,7 @@ class LiveSource:
         while not self._stop.is_set():
             if idle:
                 with contextlib.suppress(Exception):
-                    self._idle, self._idle_at = idle.read(), time.monotonic()
+                    self._idle, self._idle_at = idle.read(), clock.now()
             if tick % 2 == 0:
                 title = ""
                 if title_probe:
@@ -150,7 +150,7 @@ class LiveSource:
 
     # ---------- public ----------
     def idle_seconds(self, now: float | None = None) -> float:
-        now = time.monotonic() if now is None else now
+        now = clock.now() if now is None else now
         candidates = []
         if self._has_idle:
             candidates.append(self._idle + (now - self._idle_at))

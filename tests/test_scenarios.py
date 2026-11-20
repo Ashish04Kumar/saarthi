@@ -6,6 +6,8 @@ import time
 
 import pytest
 
+from saarthi import clock
+
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 
@@ -71,7 +73,7 @@ def reset(b):
     b.bubble.hide()
     b._speech.clear()
     b.simulate(Activity(), 60)
-    b.sm.end_transient(time.monotonic())
+    b.sm.end_transient(clock.now())
     pump(b, 0.6)
 
 
@@ -112,11 +114,11 @@ def test_typing_through_a_break_cancels_it(buddy):
     buddy.simulate(Activity(keys_per_sec=5), 30)
     buddy.tick()
     buddy.wellness.streak.seconds = 44.9  # pretend 45 s of typing already happened
-    buddy.wellness._last_tick = time.monotonic() - 0.5
+    buddy.wellness._last_tick = clock.now() - 0.5
     buddy.wellness.tick()
     assert buddy.wellness.mode is None
     assert buddy.sm.state != State.BREAK
-    assert buddy.wellness.break_snooze and buddy.wellness.break_snooze > time.monotonic()
+    assert buddy.wellness.break_snooze and buddy.wellness.break_snooze > clock.now()
     assert buddy.sm.active_minutes >= active_before  # work time is not wiped
     assert "zaroori" in buddy.bubble.text or "important" in buddy.bubble.text
 
@@ -166,8 +168,8 @@ def test_lunch_eats_then_strolls_slowly_and_thinks(buddy):
     reset(buddy)
     buddy.wellness.set_status("lunch")
     assert buddy.wellness.status == "lunch" and buddy.sm.state == State.EAT
-    buddy.wellness.eat_until = time.monotonic() - 1  # pretend 10-15 min of eating went by
-    buddy.wellness._last_tick = time.monotonic()
+    buddy.wellness.eat_until = clock.now() - 1  # pretend 10-15 min of eating went by
+    buddy.wellness._last_tick = clock.now()
     buddy.wellness.tick()
     assert buddy.sm.state == State.THINK
     assert buddy.walker.pacing and buddy.walker.pace_factor < 1  # slow stroll
@@ -186,7 +188,7 @@ def test_typing_during_lunch_asks_instead_of_cancelling(buddy):
     buddy.simulate(Activity(keys_per_sec=5), 30)
     buddy.tick()
     buddy.wellness.streak.seconds = 44.9
-    buddy.wellness._last_tick = time.monotonic() - 0.5
+    buddy.wellness._last_tick = clock.now() - 0.5
     buddy.wellness.tick()
     assert buddy.wellness.status == "lunch"  # you set lunch yourself, so it only asks
     assert len(buddy.org.cards) == 1
@@ -266,10 +268,10 @@ def test_minutes_picker_sets_and_changes_session_length(buddy, monkeypatch):
     default_before = buddy.cfg["lunch_minutes"]
     assert buddy.toggle_status("lunch")
     assert asked[("lunch", False)] == default_before  # offered the default (60 min)
-    assert 24 * 60 < buddy.wellness.ends - time.monotonic() <= 25 * 60
+    assert 24 * 60 < buddy.wellness.ends - clock.now() <= 25 * 60
     assert buddy.cfg["lunch_minutes"] == 25  # "make it default" was ticked
     buddy.change_session_time()
-    assert 89 * 60 < buddy.wellness.ends - time.monotonic() <= 90 * 60  # updated while running
+    assert 89 * 60 < buddy.wellness.ends - clock.now() <= 90 * 60  # updated while running
     monkeypatch.setattr(DurationDialog, "ask", staticmethod(lambda *a, **k: None))
     buddy.toggle_status("lunch")  # same status again: back to work, no question asked
     assert buddy.wellness.status == "working"
@@ -282,7 +284,7 @@ def test_music_puts_headphones_on_even_on_low_battery(buddy, monkeypatch):
     from saarthi.states import Activity, State
 
     lap = buddy.laptop
-    now = time.monotonic()
+    now = clock.now()
     buddy.activity = Activity(music_playing=True)
     lap.refresh_looks(now)
     assert buddy.win.variant(State.IDLE) == "music"
@@ -420,3 +422,30 @@ def test_green_dot_when_they_open_the_link(buddy, monkeypatch):
     buddy.share._message('{"type": "viewers", "count": 0}')
     assert not buddy.win.presence
     buddy.cfg["language"] = "hinglish"
+
+
+@pytest.mark.parametrize("kind", ["lunch", "break"])
+def test_sessions_keep_time_while_the_lid_is_closed(buddy, monkeypatch, kind):
+    """Saarthi's clock counts through sleep: a 60-min lunch is over after 2 h with the lid closed."""
+    from saarthi import clock
+
+    w = buddy.wellness
+    (w.start_lunch if kind == "lunch" else w.start_break)(60 if kind == "lunch" else 5)
+    assert w.mode == kind
+    real = clock.now()
+    monkeypatch.setattr(clock, "now", lambda: real + 2 * 3600)  # lid closed for two hours
+    w._last_tick = real + 2 * 3600 - 0.5
+    for _ in range(3):
+        w.tick()
+    assert w.mode is None  # the session ended on the first tick after waking up
+
+
+def test_clock_counts_through_sleep_on_linux():
+    import sys
+    import time
+
+    from saarthi import clock
+
+    if sys.platform.startswith("linux"):
+        # BOOTTIME includes time suspended, so it's never behind the monotonic clock
+        assert clock.now() >= time.monotonic() - 0.01

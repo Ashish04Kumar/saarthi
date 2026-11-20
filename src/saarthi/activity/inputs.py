@@ -10,6 +10,7 @@ import threading
 import time
 from collections.abc import Callable
 
+from .. import clock
 from .counters import RateCounter
 
 # evdev constants (from linux/input-event-codes.h)
@@ -76,11 +77,11 @@ class EvdevInput(threading.Thread):
         return f"{len(self.devices)} device(s)"
 
     def run(self) -> None:
-        last_scan = time.monotonic()
+        last_scan = clock.now()
         while not self._quit.is_set():
-            if time.monotonic() - last_scan > 15:
+            if clock.now() - last_scan > 15:
                 self._scan()
-                last_scan = time.monotonic()
+                last_scan = clock.now()
             devs = list(self.devices.values())
             if not devs:
                 time.sleep(1)

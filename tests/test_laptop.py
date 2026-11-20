@@ -88,7 +88,7 @@ def test_probe_sees_wifi_drop_at_once_and_retries_after_reconnect(monkeypatch):
     link["up"] = True
     answers[:] = [False]  # DHCP not ready yet
     p.watch_net(None)
-    assert p.net is False and p._net_at - laptop.time.monotonic() < 2.5  # tries again in 2 s
+    assert p.net is False and p._net_at - laptop.clock.now() < 2.5  # tries again in 2 s
     p._net_at = 0
     p.watch_net(None)
     assert p.net is True

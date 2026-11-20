@@ -96,6 +96,10 @@ def technical() -> list:
                  ["Weather", "30 min", "Open-Meteo forecast, outfit, rain warning"],
                  ["Chit-chat", "20–40 min", "A random line (low priority)"]], [40, 30, 104])]
 
+    s.append(P("Every timer and deadline uses <i>clock.now()</i>, a clock that keeps counting while the laptop "
+               "sleeps (Linux CLOCK_BOOTTIME, macOS CLOCK_MONOTONIC, wall clock elsewhere). A 60-minute lunch started "
+               "before closing the lid is over when the lid opens two hours later, instead of resuming where it was."))
+
     s += [P("5. Activity detection", "h1"),
           table([["Signal", "Linux Wayland", "Linux X11", "Windows", "macOS"],
                  ["Typing / scroll", "evdev (input group)", "evdev or pynput", "pynput", "pynput (Accessibility)"],

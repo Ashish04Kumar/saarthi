@@ -14,11 +14,11 @@ from __future__ import annotations
 
 import json
 import secrets
-import time
 
 from PySide6.QtCore import QObject, QTimer, QUrl
 from PySide6.QtWebSockets import QWebSocket
 
+from . import clock
 from .states import State
 
 ACTIONS = ("poke", "tickle", "slap", "ball", "pillow", "love", "kiss", "hug", "angry", "boots", "jeans")
@@ -194,7 +194,7 @@ class ShareLink(QObject):
         if not self.online:
             return
         view = view_of(self.buddy)
-        now = time.monotonic()
+        now = clock.now()
         if view != self._sent or now - self._sent_at >= HEARTBEAT:
             self._send(view)
             self._sent, self._sent_at = view, now
@@ -270,7 +270,7 @@ class ShareLink(QObject):
             return  # screen sharing: she still sees it on her page
         lang = "hinglish" if self.cfg["language"] == "hinglish" else "en"
         line = LINES[lang][action].format(n=self.cfg["share_friend"] or ("Kisi" if lang == "hinglish" else "Someone"))
-        now = time.monotonic()
+        now = clock.now()
         state, take, secs = REACT[action]
         if b.sm.preview is None and not b.sm.busy:  # don't break a break / lunch / breathing session
             b.walker.cancel()
