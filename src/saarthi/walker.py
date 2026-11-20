@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 import random
-import time
 
 from PySide6.QtCore import QTimer
 
+from . import clock
 from .states import State
 
 STEP_MS = 33
@@ -55,7 +55,7 @@ class Walker:
                 on_arrive()
             return
         self.target, self._arrive, self.factor = x, on_arrive, factor
-        self._last = time.monotonic()
+        self._last = clock.now()
         self.win.set_override(State.WALK, mirror=x < self.x, speed=factor)
         self.step_timer.start(STEP_MS)
 
@@ -69,7 +69,7 @@ class Walker:
         self.walk_to(x, on_arrive, factor)
 
     def _step(self) -> None:
-        now = time.monotonic()
+        now = clock.now()
         dt, self._last = now - self._last, now
         if self.target is None:
             return

@@ -10,10 +10,10 @@ from __future__ import annotations
 import contextlib
 import json
 import threading
-import time
 import urllib.error
 import urllib.request
 
+from . import clock
 from .schema import SaarthiState
 
 HEARTBEAT = 30.0
@@ -25,7 +25,7 @@ class GlitchLink:
         self.url = url.rstrip("/")
         self.latest: SaarthiState | None = None
         self.sent: SaarthiState | None = None
-        self.sent_at = 0.0  # time.monotonic() of the last good send
+        self.sent_at = 0.0  # clock.now() of the last good send
         self.error = ""  # why the last send failed, for "What I see…"
         self._wake = threading.Event()
         self._quit = threading.Event()
@@ -55,7 +55,7 @@ class GlitchLink:
             if self._quit.is_set():
                 return
             with contextlib.suppress(Exception):
-                self.send_due(time.monotonic())
+                self.send_due(clock.now())
 
     def send_due(self, now: float) -> bool:
         s = self.latest
@@ -90,7 +90,7 @@ def describe(link: GlitchLink) -> str:
     if not link.enabled:
         return "not connected (set glitch_url in config.json)"
     if link.sent_at:
-        return f"{link.url}: sent {int(time.monotonic() - link.sent_at)} s ago"
+        return f"{link.url}: sent {int(clock.now() - link.sent_at)} s ago"
     return f"{link.url}: not reached yet{f' ({link.error})' if link.error else ''}"
 
 

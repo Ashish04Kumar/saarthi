@@ -3,11 +3,11 @@ bigger monitor when one is plugged in."""
 
 from __future__ import annotations
 
-import time
 from datetime import datetime
 
 from PySide6.QtCore import QObject, QTimer, Signal
 
+from . import clock
 from .laptop import BATTERY_CRITICAL, CPU_HOT_C, LaptopProbe, LaptopWatch
 from .lines import line_for
 from .states import State
@@ -25,7 +25,7 @@ class _Bridge(QObject):
 class LaptopReactions:
     def __init__(self, buddy):
         self.b = buddy
-        self.watch = LaptopWatch(started=time.monotonic())
+        self.watch = LaptopWatch(started=clock.now())
         self.probe = LaptopProbe()
         self._bridge = _Bridge()
         self._bridge.changed.connect(self.tick)
@@ -48,7 +48,7 @@ class LaptopReactions:
 
     # ---- loop ----
     def tick(self) -> None:
-        now = time.monotonic()
+        now = clock.now()
         on = self.b.cfg["laptop_alerts"]
         events: list[tuple[str, dict]] = []
         power, seq = self.probe.power, self.probe.power_seq
@@ -82,7 +82,7 @@ class LaptopReactions:
         if not text:
             return
         text = text.format(**kw)
-        now = time.monotonic()
+        now = clock.now()
         if name == "charger_in":
             self._flash = ("charging", now + FLASH_SECONDS)
             self._cheer(now)
@@ -134,7 +134,7 @@ class LaptopReactions:
 
     # ---- Try menu ----
     def simulate(self, name: str) -> None:
-        now = time.monotonic()
+        now = clock.now()
         looks = {
             "battery_low": ("low", 12.0, "tired"),
             "battery_critical": ("critical", 4.0, "tired"),

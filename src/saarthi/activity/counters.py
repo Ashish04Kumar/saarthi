@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import threading
-import time
 from collections import deque
+
+from .. import clock
 
 
 class RateCounter:
@@ -15,7 +16,7 @@ class RateCounter:
         self.last: float | None = None
 
     def hit(self, now: float | None = None, n: int = 1) -> None:
-        now = time.monotonic() if now is None else now
+        now = clock.now() if now is None else now
         with self._lock:
             for _ in range(n):
                 self._events.append(now)
@@ -23,7 +24,7 @@ class RateCounter:
             self._trim(now)
 
     def rate(self, now: float | None = None) -> float:
-        now = time.monotonic() if now is None else now
+        now = clock.now() if now is None else now
         with self._lock:
             self._trim(now)
             return len(self._events) / self.window

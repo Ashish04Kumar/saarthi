@@ -22,7 +22,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from . import theme
+from . import clock, theme
 from .scheduler import due_at, schedule
 from .store import REPEATS, Note, Reminder, Store, dt_to_str, str_to_dt
 
@@ -254,9 +254,8 @@ class QuickPanel(QWidget):
         cur = w.status
         for key, btn in self.status_btns.items():
             btn.setChecked(key == cur)
-        import time as _t
 
-        left = max(0, int(w.ends - _t.monotonic())) if w.mode else 0
+        left = max(0, int(w.ends - clock.now())) if w.mode else 0
         notes = {
             "working": "Kaam chalu 💪",
             "break": f"☕ Break pe, {left // 60} min baaki",
